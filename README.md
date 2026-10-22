@@ -11,7 +11,7 @@ Runs an action at each time of a recurrence rule, for schedules kept in SQLite a
 which fires a func at each of their times, one alarm per schedule.
 
 ```sh
-docker run --rm -p 1883:1883 eclipse-mosquitto mosquitto -c /mosquitto-no-auth.conf
+docker compose up -d mosquitto
 go run ./cmd/scheduler config/scheduler/local.json
 ```
 
@@ -108,6 +108,7 @@ neither takes its default. Logs are JSON, on stdout.
 | `internal/schedule/service` | `service.S`, which rings an alarm per enabled schedule. |
 | `internal/schedule/sqlite` | The `Store`, on SQLite. |
 | `pkg/` | Libraries with no knowledge of schedules: `config`, `log`, `mqtt`, `shutdown`, `sqlite`. |
+| `docker/` | The scheduler's Dockerfile and the broker's conf, for `docker-compose.yml`. |
 
 ## Development
 
@@ -117,6 +118,18 @@ make build     # bin/scheduler, without cgo: GOOS=linux GOARCH=arm64 make build 
 make run       # with config/scheduler/local.json, on the broker at localhost:1883
 make generate  # the moq mocks of internal/, after an interface changed
 ```
+
+## Docker
+
+```sh
+docker compose up -d --build    # mosquitto on localhost:1883, and the scheduler on it
+docker compose up -d mosquitto  # the broker alone, for make run
+```
+
+`docker/scheduler/Dockerfile` builds the binary into a `scratch` image, run as uid 65532, with
+`config/scheduler/docker.json` mounted at `/app/docker.json`: the environment still wins over it. Schedules are kept in
+the `data` volume, at `/data/scheduler.db`. The builder cross-compiles:
+`docker buildx build --platform linux/arm64 -f docker/scheduler/Dockerfile .`.
 
 ## License
 

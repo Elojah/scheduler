@@ -1,0 +1,12 @@
+# Build output and local databases
+bin/
+*.db
+*.db-shm
+*.db-wal
+
+# Not needed by the build: configs are mounted
+.claude/
+.github/
+assets/
+config/
+docker/

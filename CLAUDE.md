@@ -16,6 +16,8 @@ the README, plans in TODO.md.
 - `pkg/`: libraries with no knowledge of schedules. `config` (cleanenv), `log` (zerolog), `shutdown` (Closers),
   `sqlite` (modernc.org/sqlite, pure Go, so that `CGO_ENABLED=0` builds), and `mqtt` (request/response over
   paho.golang's autopaho).
+- `docker/`: `scheduler/Dockerfile` (cross-compiling builder, `scratch` runner as uid 65532, the database in `/data`)
+  and `mosquitto/mosquitto.conf`, for `docker-compose.yml`, which mounts `config/scheduler/docker.json`.
 - Imports go `cmd` → `internal`, `pkg`. `pkg` never imports `internal`.
 
 ## Commands
@@ -26,6 +28,7 @@ make check           # golangci-lint + tests (-shuffle=on -cpu 1,4)
 make build           # bin/scheduler, CGO_ENABLED=0, -X main.version
 make run             # CONFIG=config/scheduler/local.json, broker at localhost:1883
 make generate        # moq mocks, after an interface in internal/ changed (moq in ~/go/bin)
+docker compose up -d --build  # mosquitto on localhost:1883 and the scheduler; `up -d mosquitto` for make run
 ```
 
 Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests included. Mind `nlreturn`,

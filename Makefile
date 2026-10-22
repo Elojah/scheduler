@@ -51,7 +51,7 @@ build: ## Build bin/scheduler, without cgo
 
 # Run
 .PHONY: run
-# A broker: docker run --rm -p 1883:1883 eclipse-mosquitto mosquitto -c /mosquitto-no-auth.conf
+# A broker: docker compose up -d mosquitto
 run: ## Run the scheduler with CONFIG (config/scheduler/local.json), on the broker at localhost:1883
 	$Q $(GO) run ./cmd/scheduler $(CONFIG)
 
