@@ -1,0 +1,13 @@
+{
+	"log": {
+		"level": "debug"
+	},
+	"sqlite": {
+		"path": "scheduler.db"
+	},
+	"mqtt": {
+		"broker": "mqtt://localhost:1883",
+		"client_id": "scheduler",
+		"prefix": "scheduler/v1"
+	}
+}
