@@ -28,6 +28,7 @@ const (
 	everySecond     = "DTSTART:20000101T000000Z\nRRULE:FREQ=SECONDLY"
 	everyTwoSeconds = "DTSTART:20000101T000000Z\nRRULE:FREQ=SECONDLY;INTERVAL=2"
 	twice           = "DTSTART:20000101T000000Z\nRRULE:FREQ=SECONDLY;COUNT=2"
+	oddSeconds      = "DTSTART:20000101T000001Z\nRRULE:FREQ=SECONDLY;INTERVAL=2"
 )
 
 func TestMain(m *testing.M) {
@@ -187,8 +188,8 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestUpdate_Reset: with the same options, the alarm is Reset: it reads the new times once the action under way
-// returns, rather than another alarm running them meanwhile, and the next time runs with the new params.
+// TestUpdate_Reset: a new rule with the same options Resets the alarm: it reads the new times once the action under
+// way returns, rather than another alarm running them meanwhile, and the next time runs with the new params.
 func TestUpdate_Reset(t *testing.T) {
 	t.Parallel()
 
@@ -200,12 +201,35 @@ func TestUpdate_Reset(t *testing.T) {
 		}
 
 		time.Sleep(200 * time.Millisecond)
-		sc.Options.Params = json.RawMessage(`"x"`)
+		sc.Rule, sc.Options.Params = oddSeconds, json.RawMessage(`"x"`)
 		if _, err := svc.Update(t.Context(), sc); err != nil {
 			t.Fatal(err)
 		}
 
 		time.Sleep(3300 * time.Millisecond)
+		fired.check(t, "slow 0s at 0s", `slow 1s at 1.5s "x"`, `slow 3s at 3s "x"`)
+	})
+}
+
+// TestUpdate_Params: new params alone leave the alarm's times as they were: one passed while the action runs still
+// runs, with them, where a Reset from now would drop it.
+func TestUpdate_Params(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		svc, fired := newService(t)
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "slow", Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		time.Sleep(1200 * time.Millisecond)
+		sc.Options.Params = json.RawMessage(`"x"`)
+		if _, err := svc.Update(t.Context(), sc); err != nil {
+			t.Fatal(err)
+		}
+
+		time.Sleep(2100 * time.Millisecond)
 		fired.check(t, "slow 0s at 0s", `slow 1s at 1.5s "x"`, `slow 2s at 3s "x"`)
 	})
 }
@@ -307,6 +331,49 @@ func TestDial(t *testing.T) {
 
 		time.Sleep(time.Second)
 		fired.check(t, "a 2s")
+	})
+}
+
+// TestParallel: changes of different schedules run concurrently, and leave no alarm once deleted.
+func TestParallel(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		svc, fired := newService(t)
+		var wg sync.WaitGroup
+		for range 8 {
+			wg.Go(func() {
+				sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true})
+				if err != nil {
+					t.Error(err)
+
+					return
+				}
+				for _, change := range []func(){
+					func() { sc.Rule = everyTwoSeconds },
+					func() { sc.Action = "b" },
+					func() { sc.Options.MaxDelay = schedule.Duration(time.Second) },
+					func() { sc.Enabled = false },
+					func() { sc.Enabled = true },
+				} {
+					change()
+					if _, err := svc.Update(t.Context(), sc); err != nil {
+						t.Error(err)
+					}
+				}
+				if err := svc.Delete(t.Context(), sc.ID); err != nil {
+					t.Error(err)
+				}
+			})
+		}
+		wg.Wait()
+		synctest.Wait()
+
+		before := fired.count()
+		time.Sleep(3 * time.Second)
+		if after := fired.count(); after != before {
+			t.Errorf("fired %d times after every schedule was deleted", after-before)
+		}
 	})
 }
 
@@ -424,6 +491,13 @@ func (l *log) addLine(line string) {
 	defer l.mu.Unlock()
 
 	l.lines = append(l.lines, line)
+}
+
+func (l *log) count() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return len(l.lines)
 }
 
 func (l *log) check(t *testing.T, want ...string) {

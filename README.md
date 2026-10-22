@@ -76,9 +76,9 @@ A refused request gets `{"error": {"code": …, "message": …}}`:
 
 - **Times start at now.** A schedule created, updated or loaded at startup runs from the next time of its rule:
   times passed while it was disabled, or the scheduler down, are not caught up.
-- **Update Resets the alarm** to the new rule, once the action under way returns. A change of `max_delay`,
-  `coalesce`, `spin` or `poll` replaces the alarm instead, since an alarm's tuning is fixed when it is created.
-  A new action or params applies from the next time.
+- **Update does only what changed.** A new rule Resets the alarm, once the action under way returns. A change of
+  `max_delay`, `coalesce`, `spin` or `poll` replaces the alarm instead, since an alarm's tuning is fixed when it is
+  created. A new action or params applies from the next time, the alarm's times left as they were.
 - **An action runs in its schedule's alarm goroutine**: a slow one makes the next times of its schedule late, not
   those of others. `max_delay` and `coalesce` drop such late times.
 - **Disable and delete never wait**: the action under way finishes. On SIGHUP, SIGINT or SIGTERM, the request under

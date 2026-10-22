@@ -12,13 +12,12 @@
 //	err = svc.Close(ctx)
 //
 // Each enabled Schedule has an alarm (github.com/elojah/alarm) ringing its rule's times (github.com/elojah/rrule) from
-// now, in a goroutine of its own, which runs the Action its key names. Update Resets the alarm to the new rule, unless
-// the alarm's Options changed, which replaces it.
+// now, in a goroutine of its own, which runs the Action its key names. Update does only what changed: a new rule Resets
+// the alarm, new Options but Params replace it, and a new Action or Params runs from the next time.
 package service
 
 import (
 	"context"
-	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -30,23 +29,21 @@ var _ schedule.Service = (*S)(nil)
 
 // S keeps schedules in Store, and rings an alarm per enabled one, running one of Actions. Set Store and Actions, then
 // Dial before any other call. Get and List are Store's.
+//
+// Its methods run concurrently, but changes of one schedule must not, else the store and the alarm could each keep a
+// different one: the API serves one request at a time.
 type S struct {
 	schedule.Store
 
 	Actions schedule.Actions
 
 	runner *runner
-	// mu serializes changes, so that the alarms run what the store holds.
-	mu sync.Mutex
 }
 
 // Dial rings the enabled schedules of the store, from now. It logs and skips a schedule that no longer runs, such as
 // one whose action was removed.
 func (s *S) Dial(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.runner = newRunner(s.Actions)
+	s.runner = &runner{actions: s.Actions}
 	schedules, err := s.List(ctx)
 	if err != nil {
 		return err
@@ -61,7 +58,7 @@ func (s *S) Dial(ctx context.Context) error {
 
 			continue
 		}
-		s.runner.run(ctx, sc, set)
+		s.runner.start(ctx, sc, set)
 	}
 
 	return nil
@@ -80,42 +77,36 @@ func (s *S) Create(ctx context.Context, sc schedule.Schedule) (schedule.Schedule
 		return schedule.Schedule{}, err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if err := s.Store.Create(ctx, sc); err != nil {
 		return schedule.Schedule{}, err
 	}
-	s.runner.run(ctx, sc, set)
+	if sc.Enabled {
+		s.runner.start(ctx, sc, set)
+	}
 
 	return sc, nil
 }
 
-// Update replaces the schedule of sc.ID with sc. Its alarm is Reset to the new rule from now, unless MaxDelay,
-// Coalesce, Spin or Poll changed, which replaces it, or sc is disabled, which stops it. The action under way finishes
-// either way.
+// Update replaces the schedule of sc.ID with sc, and does only what changed to its alarm. A new rule Resets it from
+// now, once the action under way returns. A new MaxDelay, Coalesce, Spin or Poll replaces it, and disabling stops it,
+// the action under way finishing either way. A new Action or Params runs from the next time, which a passed time
+// still is.
 func (s *S) Update(ctx context.Context, sc schedule.Schedule) (schedule.Schedule, error) {
 	set, err := sc.Parse(s.Actions)
 	if err != nil {
 		return schedule.Schedule{}, err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if err := s.Store.Update(ctx, sc); err != nil {
 		return schedule.Schedule{}, err
 	}
-	s.runner.run(ctx, sc, set)
+	s.runner.update(ctx, sc, set)
 
 	return sc, nil
 }
 
 // Delete removes the schedule of id, and stops its alarm. The action under way finishes.
 func (s *S) Delete(ctx context.Context, id uuid.UUID) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if err := s.Store.Delete(ctx, id); err != nil {
 		return err
 	}
@@ -125,7 +116,7 @@ func (s *S) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // Close stops every alarm, and waits until the actions under way return. Once ctx is done, it cancels their ctx and
-// returns ctx.Err(). Changes after it are stored, but ring no alarm.
+// returns ctx.Err(). Call it once no other call is under way: changes after it are stored, but ring no alarm.
 func (s *S) Close(ctx context.Context) error {
 	return s.runner.shutdown(ctx)
 }

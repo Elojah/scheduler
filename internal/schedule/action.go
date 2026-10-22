@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// Action is run at each time of an enabled Schedule's rule, with the Schedule as it is then, in its alarm's goroutine:
-// an Action slower than the gap between times makes the next ones late, which Options.MaxDelay and Options.Coalesce
-// drop. ctx is cancelled once the Service's Close ctx is done.
+// Action is run at each time of an enabled Schedule's rule, with the Schedule as of its last change of Action or
+// Params, in its alarm's goroutine: an Action slower than the gap between times makes the next ones late, which
+// Options.MaxDelay and Options.Coalesce drop. ctx is cancelled once the Service's Close ctx is done.
 type Action func(ctx context.Context, s Schedule, at time.Time) error
 
 // Actions maps the keys that Schedule.Action names to what they run.

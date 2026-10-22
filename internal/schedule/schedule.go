@@ -82,6 +82,11 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// SameTuning reports whether o and other build the same alarm: all but Params, which the alarm's action gets.
+func (o Options) SameTuning(other Options) bool {
+	return o.MaxDelay == other.MaxDelay && o.Coalesce == other.Coalesce && o.Spin == other.Spin && o.Poll == other.Poll
+}
+
 // Parse returns s's rule, or an InvalidRRuleError, UnknownActionError, NegativeDurationError or InvalidParamsError if
 // s cannot run with actions.
 func (s Schedule) Parse(actions Actions) (rrule.Set, error) {

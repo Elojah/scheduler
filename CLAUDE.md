@@ -45,16 +45,20 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
 
 ## Invariants
 
-- `service.S` writes the store before touching the runner, under `S.mu`, so that a refused change leaves the alarms as
-  they were, and the alarms run what the store holds.
-- `runner.run` Resets the alarm under way if its tuning (MaxDelay, Coalesce, Spin, Poll) is unchanged, storing the
-  new Schedule in `ringing.schedule` first, which each time loads, so that a new Action or Params applies from the
-  next time. Otherwise, or once Reset returns false (the old rule ended), it closes the alarm and starts another.
+- `service.S` has no lock: changes of different schedules run concurrently. It writes the store before touching the
+  runner, so that a refused change leaves the alarms as they were. Changes of one schedule must not race, else the
+  store and the alarm could each keep a different one (an Update racing a Delete leaves an alarm): the API's one loop
+  serializes them. Close runs once requests stopped, which `main`'s Closers order does.
+- `runner.update` does only what changed: disabled, it stops the alarm; with none or a new tuning (MaxDelay,
+  Coalesce, Spin, Poll), it starts another. Else a new Action or Params swaps `ringing.fn`, the callback the alarm
+  loads at each time, and a new rule Resets the alarm, starting another once Reset returns false (the old rule
+  ended). `ringing.schedule` is the last one applied, for update to diff: its tuning is the one `alarm.New` took.
 - Ring's ctx is the caller's `WithoutCancel`: a request's ctx never stops an alarm. Only `stop` (Close) and
   `shutdown` do. `stop` never waits, so a request is never blocked by an action.
-- `alarms` holds each schedule's current alarm, `live` every Ring not returned, replaced and stopped ones included,
-  so that `shutdown` cancels them all once its ctx is done. A Ring removes itself from both when it returns.
-- `closed` keeps alarms from starting after `shutdown`, whose `wg.Wait` would race a `wg.Go`.
+- `alarms` (a `sync.Map`) holds each enabled schedule's alarm, ended ones included until updated or deleted. `live`
+  (a `sync.Map`, which a Ring leaves when it returns) maps every Ring not returned, replaced and stopped ones
+  included, to its ctx's cancel, so that `shutdown` cancels them all once its ctx is done.
+- `closed` (atomic) keeps alarms from starting after `shutdown`.
 - `pkg/mqtt`'s `OnPublishReceived` never blocks: it queues requests (64) for one loop, and drops them when full, so
   that paho reads on, the PUBACKs of the loop's replies included. One loop keeps requests in order. Its connection
   runs on a ctx detached from Dial's, which is the init timeout. Close waits for the request under way and its
