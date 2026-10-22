@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="scheduler" width="180">
+</p>
+
 # scheduler
 
 [![CI](https://github.com/Elojah/scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/Elojah/scheduler/actions/workflows/ci.yml)
