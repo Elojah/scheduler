@@ -30,7 +30,7 @@ const toggle = (s: Schedule, enabled: boolean) => store.update({ ...s, enabled }
 const remove = (s: Schedule) =>
   confirm.require({
     header: 'Delete schedule',
-    message: `Delete ${s.action}, ${describe(s.rule)}? Its action under way finishes.`,
+    message: `Delete ${s.operation}, ${describe(s.rule)}? Its operation under way finishes.`,
     icon: 'pi pi-trash',
     acceptProps: { label: 'Delete', icon: 'pi pi-trash', severity: 'danger' },
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
@@ -53,12 +53,12 @@ const remove = (s: Schedule) =>
     </template>
     <Column header="Enabled" class="w-24">
       <template #body="{ data }">
-        <ToggleSwitch :modelValue="data.enabled" :aria-label="`Enable ${data.action}`" @update:modelValue="(v: boolean) => toggle(data, v)" />
+        <ToggleSwitch :modelValue="data.enabled" :aria-label="`Enable ${data.operation}`" @update:modelValue="(v: boolean) => toggle(data, v)" />
       </template>
     </Column>
-    <Column header="Action">
+    <Column header="Operation">
       <template #body="{ data }">
-        <Tag :value="data.action" severity="secondary" />
+        <Tag :value="data.operation" severity="secondary" />
       </template>
     </Column>
     <Column header="Frequency">

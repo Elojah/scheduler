@@ -19,15 +19,15 @@ func (s *Store) Create(ctx context.Context, sc schedule.Schedule) error {
 		return err
 	}
 	// options as a string: a []byte would be a BLOB, which the STRICT TEXT column refuses.
-	_, err = s.ExecContext(ctx, `INSERT INTO schedules (id, rule, action, options, enabled) VALUES (?, ?, ?, ?, ?)`,
-		sc.ID, sc.Rule, sc.Action, string(options), sc.Enabled)
+	_, err = s.ExecContext(ctx, `INSERT INTO schedules (id, rule, operation, options, enabled) VALUES (?, ?, ?, ?, ?)`,
+		sc.ID, sc.Rule, sc.Operation, string(options), sc.Enabled)
 
 	return err
 }
 
 // Get returns the schedule of id.
 func (s *Store) Get(ctx context.Context, id uuid.UUID) (schedule.Schedule, error) {
-	row := s.QueryRowContext(ctx, `SELECT id, rule, action, options, enabled FROM schedules WHERE id = ?`, id)
+	row := s.QueryRowContext(ctx, `SELECT id, rule, operation, options, enabled FROM schedules WHERE id = ?`, id)
 	sc, err := scan(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return schedule.Schedule{}, schedule.NotFoundError{ID: id}
@@ -38,7 +38,7 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID) (schedule.Schedule, error
 
 // List returns every schedule, by ID, which as a UUIDv7 is their order of creation.
 func (s *Store) List(ctx context.Context) ([]schedule.Schedule, error) {
-	rows, err := s.QueryContext(ctx, `SELECT id, rule, action, options, enabled FROM schedules ORDER BY id`)
+	rows, err := s.QueryContext(ctx, `SELECT id, rule, operation, options, enabled FROM schedules ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -63,8 +63,8 @@ func (s *Store) Update(ctx context.Context, sc schedule.Schedule) error {
 	if err != nil {
 		return err
 	}
-	res, err := s.ExecContext(ctx, `UPDATE schedules SET rule = ?, action = ?, options = ?, enabled = ? WHERE id = ?`,
-		sc.Rule, sc.Action, string(options), sc.Enabled, sc.ID)
+	res, err := s.ExecContext(ctx, `UPDATE schedules SET rule = ?, operation = ?, options = ?, enabled = ? WHERE id = ?`,
+		sc.Rule, sc.Operation, string(options), sc.Enabled, sc.ID)
 	if err != nil {
 		return err
 	}
@@ -82,13 +82,13 @@ func (s *Store) Delete(ctx context.Context, id uuid.UUID) error {
 	return found(res, id)
 }
 
-// scan reads a schedule from a row of id, rule, action, options and enabled.
+// scan reads a schedule from a row of id, rule, operation, options and enabled.
 func scan(row interface{ Scan(dest ...any) error }) (schedule.Schedule, error) {
 	var (
 		sc      schedule.Schedule
 		options []byte
 	)
-	if err := row.Scan(&sc.ID, &sc.Rule, &sc.Action, &options, &sc.Enabled); err != nil {
+	if err := row.Scan(&sc.ID, &sc.Rule, &sc.Operation, &options, &sc.Enabled); err != nil {
 		return schedule.Schedule{}, err
 	}
 	if err := json.Unmarshal(options, &sc.Options); err != nil {

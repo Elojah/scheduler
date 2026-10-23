@@ -23,9 +23,9 @@ func TestStore(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "schedule.db")
 	s := open(t, path)
 	sc := schedule.Schedule{
-		ID:     uuid.Must(uuid.NewV7()),
-		Rule:   "DTSTART:20260101T090000Z\nRRULE:FREQ=DAILY",
-		Action: "noop",
+		ID:        uuid.Must(uuid.NewV7()),
+		Rule:      "DTSTART:20260101T090000Z\nRRULE:FREQ=DAILY",
+		Operation: "noop",
 		Options: schedule.Options{
 			MaxDelay: schedule.Duration(time.Second),
 			Coalesce: schedule.Duration(time.Minute),
@@ -40,7 +40,7 @@ func TestStore(t *testing.T) {
 	}
 	get(t, s, sc)
 
-	sc.Rule, sc.Action, sc.Options, sc.Enabled = "DTSTART:20260101T090000Z\nRRULE:FREQ=HOURLY", "other", schedule.Options{}, false
+	sc.Rule, sc.Operation, sc.Options, sc.Enabled = "DTSTART:20260101T090000Z\nRRULE:FREQ=HOURLY", "other", schedule.Options{}, false
 	if err := s.Update(t.Context(), sc); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestStore_List(t *testing.T) {
 	}
 	// Inserted out of order.
 	for _, i := range []int{2, 0, 1} {
-		if err := s.Create(t.Context(), schedule.Schedule{ID: want[i], Rule: "r", Action: "a"}); err != nil {
+		if err := s.Create(t.Context(), schedule.Schedule{ID: want[i], Rule: "r", Operation: "o"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -91,7 +91,7 @@ func TestStore_NotFound(t *testing.T) {
 	t.Parallel()
 
 	s := open(t, filepath.Join(t.TempDir(), "schedule.db"))
-	sc := schedule.Schedule{ID: uuid.Must(uuid.NewV7()), Rule: "r", Action: "a"}
+	sc := schedule.Schedule{ID: uuid.Must(uuid.NewV7()), Rule: "r", Operation: "o"}
 	if err := s.Create(t.Context(), sc); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestStore_Create(t *testing.T) {
 	t.Parallel()
 
 	s := open(t, filepath.Join(t.TempDir(), "schedule.db"))
-	sc := schedule.Schedule{ID: uuid.Must(uuid.NewV7()), Rule: "r", Action: "a"}
+	sc := schedule.Schedule{ID: uuid.Must(uuid.NewV7()), Rule: "r", Operation: "o"}
 	if err := s.Create(t.Context(), sc); err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ const durations = [
 ] as const
 
 const rule = ref('')
-const action = ref('')
+const operation = ref('')
 const enabled = ref(true)
 const options = ref<Record<(typeof durations)[number]['key'], string>>({ max_delay: '', coalesce: '', spin: '', poll: '' })
 const params = ref('')
@@ -44,7 +44,7 @@ watch(
     }
     const s = props.schedule
     rule.value = s?.rule ?? presets()[2].rule
-    action.value = s?.action ?? 'noop'
+    operation.value = s?.operation ?? 'noop'
     enabled.value = s?.enabled ?? true
     options.value = { max_delay: s?.options.max_delay ?? '', coalesce: s?.options.coalesce ?? '', spin: s?.options.spin ?? '', poll: s?.options.poll ?? '' }
     params.value = s?.options.params === undefined ? '' : JSON.stringify(s.options.params, null, 2)
@@ -96,7 +96,7 @@ const submit = async () => {
   }
   paramsError.value = ''
 
-  const s = { rule: rule.value.trim(), action: action.value.trim(), options: o, enabled: enabled.value }
+  const s = { rule: rule.value.trim(), operation: operation.value.trim(), options: o, enabled: enabled.value }
   saving.value = true
   try {
     await (props.schedule ? store.update({ ...s, id: props.schedule.id }) : store.create(s))
@@ -129,8 +129,8 @@ const submit = async () => {
 
       <div class="flex flex-wrap items-end gap-6">
         <div class="flex flex-col gap-2 grow">
-          <label for="action" class="font-medium">Action</label>
-          <InputText id="action" v-model="action" />
+          <label for="operation" class="font-medium">Operation</label>
+          <InputText id="operation" v-model="operation" />
         </div>
         <div class="flex items-center gap-2 pb-2">
           <ToggleSwitch v-model="enabled" inputId="enabled" />
@@ -149,7 +149,7 @@ const submit = async () => {
             <label for="params" class="font-medium">Params</label>
             <Textarea id="params" v-model="params" rows="2" autoResize spellcheck="false" class="!font-mono !text-sm" placeholder='{"relay": 1}' :invalid="!!paramsError" />
             <small v-if="paramsError" class="text-red-500">{{ paramsError }}</small>
-            <small v-else class="text-surface-500">any JSON, handed to the action as is</small>
+            <small v-else class="text-surface-500">any JSON, handed to the operation as is</small>
           </div>
         </div>
       </Fieldset>

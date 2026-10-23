@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	// timeout bounds each wait on an action.
+	// timeout bounds each wait on an operation.
 	timeout = 5 * time.Second
 	// every100ms starts at a whole second, so that it lines up with any clock.
 	every100ms = "DTSTART:20260101T000000Z\nRRULE:FREQ=SECONDLY;X-FREQ=PT0.1S"
@@ -51,12 +51,12 @@ func TestServe(t *testing.T) {
 		t.Errorf("list = %+v, want no error and []", r)
 	}
 
-	r := call(t, h, "create", `{"rule":"`+jsonLine(every100ms)+`","action":"noop","options":{"max_delay":"50ms"}}`)
+	r := call(t, h, "create", `{"rule":"`+jsonLine(every100ms)+`","operation":"noop","options":{"max_delay":"50ms"}}`)
 	if r.Error != nil || r.Schedule == nil {
 		t.Fatalf("create = %+v, want a schedule", r)
 	}
 	sc := *r.Schedule
-	if sc.Rule != every100ms || sc.Action != "noop" || sc.Options.MaxDelay != schedule.Duration(50*time.Millisecond) ||
+	if sc.Rule != every100ms || sc.Operation != "noop" || sc.Options.MaxDelay != schedule.Duration(50*time.Millisecond) ||
 		sc.Enabled {
 		t.Errorf("create = %+v, want what was sent", sc)
 	}
@@ -64,7 +64,7 @@ func TestServe(t *testing.T) {
 	if r := call(t, h, "get", fmt.Sprintf(`{"id":%q}`, sc.ID)); r.Error != nil || r.Schedule.ID != sc.ID {
 		t.Errorf("get = %+v, want the schedule created", r)
 	}
-	r = call(t, h, "update", fmt.Sprintf(`{"id":%q,"rule":"%s","action":"noop","enabled":true}`, sc.ID, jsonLine(every100ms)))
+	r = call(t, h, "update", fmt.Sprintf(`{"id":%q,"rule":"%s","operation":"noop","enabled":true}`, sc.ID, jsonLine(every100ms)))
 	if r.Error != nil || !r.Schedule.Enabled {
 		t.Errorf("update = %+v, want the schedule enabled", r)
 	}
@@ -86,14 +86,14 @@ func TestServe_Invalid(t *testing.T) {
 	h, _ := newHandler(t)
 	for _, tt := range []struct{ op, payload, code string }{
 		{"create", `{`, "invalid"},
-		{"create", `{"rule":"FREQ=DAILY","action":"noop"}`, "invalid"},
-		{"create", `{"rule":"` + jsonLine(every100ms) + `","action":"unknown"}`, "invalid"},
-		{"create", `{"rule":"` + jsonLine(every100ms) + `","action":"noop","enable":true}`, "invalid"},
-		{"create", `{"rule":"` + jsonLine(every100ms) + `","action":"noop","options":{"poll":"-1s"}}`, "invalid"},
-		{"create", `{"rule":"` + jsonLine(every100ms) + `","action":"noop","options":{"max_delay":"soon"}}`, "invalid"},
+		{"create", `{"rule":"FREQ=DAILY","operation":"noop"}`, "invalid"},
+		{"create", `{"rule":"` + jsonLine(every100ms) + `","operation":"unknown"}`, "invalid"},
+		{"create", `{"rule":"` + jsonLine(every100ms) + `","operation":"noop","enable":true}`, "invalid"},
+		{"create", `{"rule":"` + jsonLine(every100ms) + `","operation":"noop","options":{"poll":"-1s"}}`, "invalid"},
+		{"create", `{"rule":"` + jsonLine(every100ms) + `","operation":"noop","options":{"max_delay":"soon"}}`, "invalid"},
 		{"get", `{"id":"not a uuid"}`, "invalid"},
 		{"get", `{"id":"0199f0a8-0000-7000-8000-000000000000"}`, "not_found"},
-		{"update", `{"id":"0199f0a8-0000-7000-8000-000000000000","rule":"` + jsonLine(every100ms) + `","action":"noop"}`,
+		{"update", `{"id":"0199f0a8-0000-7000-8000-000000000000","rule":"` + jsonLine(every100ms) + `","operation":"noop"}`,
 			"not_found"},
 		{"delete", `{"id":"0199f0a8-0000-7000-8000-000000000000"}`, "not_found"},
 		{"rename", `{}`, "invalid"},
@@ -118,25 +118,25 @@ func TestServe_Internal(t *testing.T) {
 	}
 }
 
-// TestServe_Fires: a schedule created enabled runs its action.
+// TestServe_Fires: a schedule created enabled runs its operation.
 func TestServe_Fires(t *testing.T) {
 	t.Parallel()
 
 	h, fired := newHandler(t)
-	if r := call(t, h, "create", `{"rule":"`+jsonLine(every100ms)+`","action":"probe","enabled":true}`); r.Error != nil {
+	if r := call(t, h, "create", `{"rule":"`+jsonLine(every100ms)+`","operation":"probe","enabled":true}`); r.Error != nil {
 		t.Fatalf("create = %+v", r)
 	}
 	for range 3 {
 		select {
 		case <-fired:
 		case <-time.After(timeout):
-			t.Fatal("the action never ran")
+			t.Fatal("the operation never ran")
 		}
 	}
 }
 
 // newHandler returns a handler on a service.S on a database of its own, closed at the end of the test, with a probe
-// action sending on fired.
+// operation sending on fired.
 func newHandler(t *testing.T) (*handler, <-chan struct{}) {
 	t.Helper()
 
@@ -150,8 +150,8 @@ func newHandler(t *testing.T) (*handler, <-chan struct{}) {
 	}
 
 	fired := make(chan struct{}, 64)
-	actions := schedule.Blank()
-	actions["probe"] = func(context.Context, schedule.Schedule, time.Time) error {
+	operations := schedule.Blank()
+	operations["probe"] = func(context.Context, schedule.Schedule, time.Time) error {
 		select {
 		case fired <- struct{}{}:
 		default:
@@ -159,7 +159,7 @@ func newHandler(t *testing.T) (*handler, <-chan struct{}) {
 
 		return nil
 	}
-	svc := &service.S{Store: store, Actions: actions}
+	svc := &service.S{Store: store, Operations: operations}
 	if err := svc.Dial(t.Context()); err != nil {
 		t.Fatal(err)
 	}

@@ -1,8 +1,8 @@
 # CLAUDE.md
 
 `github.com/elojah/scheduler`, a service gluing `../rrule` and `../alarm`: Schedules kept in SQLite, an alarm per
-enabled one running its action, CRUD over MQTT v5, and a web UI over it. Go 1.26.1. Laid out and run as `../trax`, its
-client stripped down. Behaviour is in godoc and the README, plans in TODO.md.
+enabled one running its operation, CRUD over MQTT v5, and a web UI over it. Go 1.26.1. Laid out and run as `../trax`,
+its client stripped down. Behaviour is in godoc and the README, plans in TODO.md.
 
 ## Layout
 
@@ -18,7 +18,8 @@ client stripped down. Behaviour is in godoc and the README, plans in TODO.md.
   pino, zod or eslint. `components/schedule/{Table,Dialog,Calendar}.vue`, `utils/{api,rule,date}.ts`. Prettier is
   trax's. `public/logo.svg` is a copy of `assets/logo.svg`.
 - `internal/schedule/`: the domain. `Schedule`, `Options`, `Duration`, `Parse` (validation), the `Store` and `Service`
-  interfaces, `Action`/`Actions`/`Blank`, the typed errors, and their moq mocks (`*_moq.go`, generated and committed).
+  interfaces, `Operation`/`Operations`/`Blank`, the typed errors, and their moq mocks (`*_moq.go`, generated and
+  committed).
 - `internal/schedule/service/`: `service.S` (the Service) and `runner.go` (an alarm per schedule).
 - `internal/schedule/sqlite/`: the `Store`, embedding a `pkg/sqlite.Service`, schema in `schema.sql`.
 - `pkg/`: libraries with no knowledge of schedules. `config` (cleanenv), `log` (zerolog), `shutdown` (Closers),
@@ -56,7 +57,7 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
   functional options.
 - Logs go through zerolog's global `log`; handlers log with `log.With().Str("method", …)`.
 - Errors are typed structs, returned as values. The API maps them with `errors.As`: `invalid` for
-  `schedule.InvalidRRuleError`, `UnknownActionError`, `NegativeDurationError`, `InvalidParamsError` and
+  `schedule.InvalidRRuleError`, `UnknownOperationError`, `NegativeDurationError`, `InvalidParamsError` and
   `InvalidRequestError`, `UnknownOpError`; `not_found` for `schedule.NotFoundError`; anything else is `internal`.
 - The API is strict, as rrule's parsing: unknown JSON fields are `invalid`.
 - The web client's endpoints reply with the same envelope, adding `unavailable` (503, `mqtt.NotConnectedError`) and
@@ -72,11 +73,11 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
   runner, so that a refused change leaves the alarms as they were. Close runs once requests stopped, which `main`'s
   Closers order does.
 - `runner.update` does only what changed: disabled, it stops the alarm; with none or a new tuning (MaxDelay,
-  Coalesce, Spin, Poll), it starts another. Else a new Action or Params swaps `ringing.fn`, the callback the alarm
+  Coalesce, Spin, Poll), it starts another. Else a new Operation or Params swaps `ringing.fn`, the callback the alarm
   loads at each time, and a new rule Resets the alarm, starting another once Reset returns false (the old rule
   ended). `ringing.schedule` is the last one applied, for update to diff: its tuning is the one `alarm.New` took.
 - Ring's ctx is the caller's `WithoutCancel`: a request's ctx never stops an alarm. Only `stop` (Close) and
-  `shutdown` do. `stop` never waits, so a request is never blocked by an action.
+  `shutdown` do. `stop` never waits, so a request is never blocked by an operation.
 - `alarms` (a `sync.Map`) holds each enabled schedule's alarm, ended ones included until updated or deleted. `live`
   (a `sync.Map`, which a Ring leaves when it returns) maps every Ring not returned, replaced and stopped ones
   included, to its ctx's cancel, so that `shutdown` cancels them all once its ctx is done.
@@ -102,8 +103,8 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
 
 - External test packages, except `cmd/scheduler` and `cmd/web_client` (`package main`, which testpackage allows). Name a test after its
   method, with a suffix for a case: `TestUpdate_Reset`. Each package's `TestMain` silences zerolog.
-- `service` tests run in a `synctest` bubble on an in-memory Store, with actions logging what they run, and `slow`
-  when it ran too, which tells a Reset (the next time runs once the action returns) from a new alarm (it runs
+- `service` tests run in a `synctest` bubble on an in-memory Store, with operations logging what they run, and `slow`
+  when it ran too, which tells a Reset (the next time runs once the operation returns) from a new alarm (it runs
   meanwhile): `TestUpdate_Reset` against `TestUpdate_Options`. `holder.Spin` never ends in a bubble: no test spins.
 - `cmd/web_client` tests `routes()` with `httptest` and a `fake` requester, a func: no broker.
 - `cmd/client` has no tests: CI runs prettier, `vue-tsc` and `vite build`.

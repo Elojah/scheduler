@@ -1,15 +1,15 @@
-// Command scheduler keeps schedules in a SQLite database, runs the action of each enabled one at each time of its
+// Command scheduler keeps schedules in a SQLite database, runs the operation of each enabled one at each time of its
 // rule, and serves them over MQTT v5 until SIGHUP, SIGINT or SIGTERM. Its config is read from the JSON file its first
 // argument names, if any, then from the environment.
 //
 // A request is a PUBLISH on <prefix>/schedules/<op>, op being create, get, list, update or delete, with a JSON
 // payload, and its reply goes to the request's Response Topic with its Correlation Data.
 //
-//	scheduler/v1/schedules/create  {"rule": …, "action": …, "options": {…}, "enabled": true}  → {"schedule": {…}}
-//	scheduler/v1/schedules/get     {"id": …}                                                  → {"schedule": {…}}
-//	scheduler/v1/schedules/list    {}                                                         → {"schedules": […]}
-//	scheduler/v1/schedules/update  {"id": …, "rule": …, "action": …, …}                       → {"schedule": {…}}
-//	scheduler/v1/schedules/delete  {"id": …}                                                  → {}
+//	scheduler/v1/schedules/create  {"rule": …, "operation": …, "options": {…}, "enabled": true}  → {"schedule": {…}}
+//	scheduler/v1/schedules/get     {"id": …}                                                     → {"schedule": {…}}
+//	scheduler/v1/schedules/list    {}                                                            → {"schedules": […]}
+//	scheduler/v1/schedules/update  {"id": …, "rule": …, "operation": …, …}                       → {"schedule": {…}}
+//	scheduler/v1/schedules/delete  {"id": …}                                                     → {}
 //
 // A refused request gets {"error": {"code": …, "message": …}}, code being invalid, not_found or internal. A request
 // without a Response Topic is handled, but gets no reply.
@@ -37,7 +37,7 @@ import (
 const (
 	// initTO bounds the init phase: config, database, alarms and connection.
 	initTO = 30 * time.Second
-	// closeTO is how long the actions under way get once signalled, before their ctx is cancelled.
+	// closeTO is how long the operations under way get once signalled, before their ctx is cancelled.
 	closeTO = 5 * time.Second
 )
 
@@ -89,7 +89,7 @@ func run(prog string, filename string) error {
 		return fail(err)
 	}
 
-	scheduleService := &service.S{Store: store, Actions: schedule.Blank()}
+	scheduleService := &service.S{Store: store, Operations: schedule.Blank()}
 	if err := scheduleService.Dial(ctx); err != nil {
 		return fail(fmt.Errorf("dial schedule service: %w", err))
 	}

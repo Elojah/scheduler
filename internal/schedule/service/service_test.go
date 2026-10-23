@@ -36,14 +36,15 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// TestCreate: an enabled schedule runs its action at each time of its rule, with its params, and a disabled one never.
+// TestCreate: an enabled schedule runs its operation at each time of its rule, with its params, and a disabled one
+// never.
 func TestCreate(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
 		a, err := svc.Create(t.Context(), schedule.Schedule{
-			Rule: everySecond, Action: "a", Enabled: true,
+			Rule: everySecond, Operation: "a", Enabled: true,
 			Options: schedule.Options{Params: json.RawMessage(`{"relay":1}`)},
 		})
 		if err != nil {
@@ -52,7 +53,7 @@ func TestCreate(t *testing.T) {
 		if a.ID == uuid.Nil {
 			t.Error("Create assigned no ID")
 		}
-		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "b"}); err != nil {
+		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "b"}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -73,14 +74,14 @@ func TestCreate_Invalid(t *testing.T) {
 		// want is a pointer to the error type Create returns.
 		want any
 	}{
-		"rule without DTSTART": {schedule.Schedule{Rule: "FREQ=DAILY", Action: "a"}, new(schedule.InvalidRRuleError)},
-		"unknown action":       {schedule.Schedule{Rule: everySecond, Action: "z"}, new(schedule.UnknownActionError)},
+		"rule without DTSTART": {schedule.Schedule{Rule: "FREQ=DAILY", Operation: "a"}, new(schedule.InvalidRRuleError)},
+		"unknown operation":    {schedule.Schedule{Rule: everySecond, Operation: "z"}, new(schedule.UnknownOperationError)},
 		"negative duration": {
-			schedule.Schedule{Rule: everySecond, Action: "a", Options: schedule.Options{MaxDelay: -1}},
+			schedule.Schedule{Rule: everySecond, Operation: "a", Options: schedule.Options{MaxDelay: -1}},
 			new(schedule.NegativeDurationError),
 		},
 		"params not JSON": {
-			schedule.Schedule{Rule: everySecond, Action: "a", Options: schedule.Options{Params: json.RawMessage("{")}},
+			schedule.Schedule{Rule: everySecond, Operation: "a", Options: schedule.Options{Params: json.RawMessage("{")}},
 			new(schedule.InvalidParamsError),
 		},
 	} {
@@ -106,7 +107,7 @@ func TestCreate_MaxDelay(t *testing.T) {
 		svc, fired := newService(t)
 		// slow takes 1.5s: 1s and 3s are passed by 500ms once it returns.
 		if _, err := svc.Create(t.Context(), schedule.Schedule{
-			Rule: everySecond, Action: "slow", Enabled: true,
+			Rule: everySecond, Operation: "slow", Enabled: true,
 			Options: schedule.Options{MaxDelay: schedule.Duration(100 * time.Millisecond)},
 		}); err != nil {
 			t.Fatal(err)
@@ -117,7 +118,7 @@ func TestCreate_MaxDelay(t *testing.T) {
 	})
 }
 
-// TestUpdate: a rule changes the times from now, an action or params the next time run, options the alarm, and
+// TestUpdate: a rule changes the times from now, an operation or params the next time run, options the alarm, and
 // Enabled whether it rings. A rule that ended rings again.
 func TestUpdate(t *testing.T) {
 	t.Parallel()
@@ -130,31 +131,31 @@ func TestUpdate(t *testing.T) {
 		fired   []string
 	}{{
 		name:    "rule",
-		created: schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true},
-		updated: schedule.Schedule{Rule: everyTwoSeconds, Action: "a", Enabled: true},
+		created: schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true},
+		updated: schedule.Schedule{Rule: everyTwoSeconds, Operation: "a", Enabled: true},
 		fired:   []string{"a 0s", "a 1s", "a 2s", "a 4s"},
 	}, {
-		name:    "action",
-		created: schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true},
+		name:    "operation",
+		created: schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true},
 		updated: schedule.Schedule{
-			Rule: everySecond, Action: "b", Enabled: true,
+			Rule: everySecond, Operation: "b", Enabled: true,
 			Options: schedule.Options{Params: json.RawMessage(`"on"`)},
 		},
 		fired: []string{"a 0s", "a 1s", `b 2s "on"`, `b 3s "on"`, `b 4s "on"`},
 	}, {
 		name:    "enable",
-		created: schedule.Schedule{Rule: everySecond, Action: "a"},
-		updated: schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true},
+		created: schedule.Schedule{Rule: everySecond, Operation: "a"},
+		updated: schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true},
 		fired:   []string{"a 2s", "a 3s", "a 4s"},
 	}, {
 		name:    "disable",
-		created: schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true},
-		updated: schedule.Schedule{Rule: everySecond, Action: "a"},
+		created: schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true},
+		updated: schedule.Schedule{Rule: everySecond, Operation: "a"},
 		fired:   []string{"a 0s", "a 1s"},
 	}, {
 		name:    "ended",
-		created: schedule.Schedule{Rule: twice, Action: "a", Enabled: true},
-		updated: schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true},
+		created: schedule.Schedule{Rule: twice, Operation: "a", Enabled: true},
+		updated: schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true},
 		fired:   []string{"a 0s", "a 1s", "a 4s"},
 	}}
 	for _, tt := range tests {
@@ -188,14 +189,14 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestUpdate_Reset: a new rule with the same options Resets the alarm: it reads the new times once the action under
+// TestUpdate_Reset: a new rule with the same options Resets the alarm: it reads the new times once the operation under
 // way returns, rather than another alarm running them meanwhile, and the next time runs with the new params.
 func TestUpdate_Reset(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "slow", Enabled: true})
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "slow", Enabled: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -211,14 +212,14 @@ func TestUpdate_Reset(t *testing.T) {
 	})
 }
 
-// TestUpdate_Params: new params alone leave the alarm's times as they were: one passed while the action runs still
+// TestUpdate_Params: new params alone leave the alarm's times as they were: one passed while the operation runs still
 // runs, with them, where a Reset from now would drop it.
 func TestUpdate_Params(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "slow", Enabled: true})
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "slow", Enabled: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -241,7 +242,7 @@ func TestUpdate_Options(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "slow", Enabled: true})
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "slow", Enabled: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -264,15 +265,15 @@ func TestUpdate_Invalid(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true})
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := svc.Update(t.Context(), schedule.Schedule{ID: sc.ID, Rule: "nope", Action: "a"}); !errors.As(
+		if _, err := svc.Update(t.Context(), schedule.Schedule{ID: sc.ID, Rule: "nope", Operation: "a"}); !errors.As(
 			err, new(schedule.InvalidRRuleError)) {
 			t.Errorf("Update = %v, want an InvalidRRuleError", err)
 		}
-		unknown := schedule.Schedule{ID: uuid.New(), Rule: everySecond, Action: "a"}
+		unknown := schedule.Schedule{ID: uuid.New(), Rule: everySecond, Operation: "a"}
 		if _, err := svc.Update(t.Context(), unknown); !errors.Is(err, schedule.NotFoundError{ID: unknown.ID}) {
 			t.Errorf("Update of an unknown ID = %v, want a NotFoundError", err)
 		}
@@ -288,7 +289,7 @@ func TestDelete(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true})
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -316,9 +317,9 @@ func TestDial(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := newStore()
 		for _, sc := range []schedule.Schedule{
-			{Rule: everySecond, Action: "a", Enabled: true},
-			{Rule: everySecond, Action: "b"},
-			{Rule: everySecond, Action: "removed", Enabled: true},
+			{Rule: everySecond, Operation: "a", Enabled: true},
+			{Rule: everySecond, Operation: "b"},
+			{Rule: everySecond, Operation: "removed", Enabled: true},
 		} {
 			sc.ID = uuid.Must(uuid.NewV7())
 			if err := store.Create(t.Context(), sc); err != nil {
@@ -343,7 +344,7 @@ func TestParallel(t *testing.T) {
 		var wg sync.WaitGroup
 		for range 8 {
 			wg.Go(func() {
-				sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true})
+				sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true})
 				if err != nil {
 					t.Error(err)
 
@@ -351,7 +352,7 @@ func TestParallel(t *testing.T) {
 				}
 				for _, change := range []func(){
 					func() { sc.Rule = everyTwoSeconds },
-					func() { sc.Action = "b" },
+					func() { sc.Operation = "b" },
 					func() { sc.Options.MaxDelay = schedule.Duration(time.Second) },
 					func() { sc.Enabled = false },
 					func() { sc.Enabled = true },
@@ -383,7 +384,7 @@ func TestParallel_Delete(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true})
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -391,7 +392,7 @@ func TestParallel_Delete(t *testing.T) {
 		var wg sync.WaitGroup
 		for _, change := range []func(sc *schedule.Schedule){
 			func(sc *schedule.Schedule) { sc.Rule = everyTwoSeconds },
-			func(sc *schedule.Schedule) { sc.Action = "b" },
+			func(sc *schedule.Schedule) { sc.Operation = "b" },
 			func(sc *schedule.Schedule) { sc.Options.MaxDelay = schedule.Duration(time.Second) },
 			func(sc *schedule.Schedule) { sc.Enabled = false },
 		} {
@@ -419,13 +420,13 @@ func TestParallel_Delete(t *testing.T) {
 	})
 }
 
-// TestClose: Close waits for the actions under way, and cancels their ctx once its own is done.
+// TestClose: Close waits for the operations under way, and cancels their ctx once its own is done.
 func TestClose(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "stuck", Enabled: true}); err != nil {
+		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "stuck", Enabled: true}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -447,7 +448,7 @@ func TestClose_Idle(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		svc, fired := newService(t)
-		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true}); err != nil {
+		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "a", Enabled: true}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -455,7 +456,7 @@ func TestClose_Idle(t *testing.T) {
 		if err := svc.Close(t.Context()); err != nil {
 			t.Errorf("Close = %v, want nil", err)
 		}
-		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "b", Enabled: true}); err != nil {
+		if _, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Operation: "b", Enabled: true}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -464,7 +465,7 @@ func TestClose_Idle(t *testing.T) {
 	})
 }
 
-// newService returns a dialed S on a store of its own, closed at the end of the test, with these actions, logging to
+// newService returns a dialed S on a store of its own, closed at the end of the test, with these operations, logging to
 // fired:
 //   - a and b log their name, the time since epoch and their params, if any;
 //   - slow logs as a, with when it runs, then sleeps 1.5s;
@@ -479,14 +480,14 @@ func newServiceWith(t *testing.T, store schedule.Store) (*service.S, *log) {
 	t.Helper()
 
 	l := &log{}
-	logged := func(name string) schedule.Action {
+	logged := func(name string) schedule.Operation {
 		return func(_ context.Context, s schedule.Schedule, at time.Time) error {
 			l.add(fmt.Sprintf("%s %v", name, at.Sub(epoch)), s.Options.Params)
 
 			return nil
 		}
 	}
-	actions := schedule.Actions{
+	operations := schedule.Operations{
 		"a": logged("a"),
 		"b": logged("b"),
 		"slow": func(_ context.Context, s schedule.Schedule, at time.Time) error {
@@ -503,7 +504,7 @@ func newServiceWith(t *testing.T, store schedule.Store) (*service.S, *log) {
 			return ctx.Err()
 		},
 	}
-	svc := &service.S{Store: store, Actions: actions}
+	svc := &service.S{Store: store, Operations: operations}
 	if err := svc.Dial(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -514,7 +515,7 @@ func newServiceWith(t *testing.T, store schedule.Store) (*service.S, *log) {
 	return svc, l
 }
 
-// log keeps the lines the actions log.
+// log keeps the lines the operations log.
 type log struct {
 	mu    sync.Mutex
 	lines []string

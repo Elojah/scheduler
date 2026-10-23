@@ -118,10 +118,10 @@ func TestListOccurrence(t *testing.T) {
 
 	ids := [4]uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}
 	h := listing(t, []schedule.Schedule{
-		{ID: ids[0], Rule: hourly, Action: "noop", Enabled: true},
-		{ID: ids[1], Rule: minutely, Action: "noop", Enabled: true},
-		{ID: ids[2], Rule: daily, Action: "noop"},
-		{ID: ids[3], Rule: every100ms, Action: "noop", Enabled: true},
+		{ID: ids[0], Rule: hourly, Operation: "noop", Enabled: true},
+		{ID: ids[1], Rule: minutely, Operation: "noop", Enabled: true},
+		{ID: ids[2], Rule: daily, Operation: "noop"},
+		{ID: ids[3], Rule: every100ms, Operation: "noop", Enabled: true},
 	})
 	w := serve(t, h, http.MethodGet, "/api/occurrences?"+day, "")
 	if w.Code != http.StatusOK {
@@ -159,7 +159,7 @@ func TestListOccurrence(t *testing.T) {
 func TestListOccurrence_Merge(t *testing.T) {
 	t.Parallel()
 
-	h := listing(t, []schedule.Schedule{{ID: uuid.New(), Rule: hourly, Action: "noop", Enabled: true}})
+	h := listing(t, []schedule.Schedule{{ID: uuid.New(), Rule: hourly, Operation: "noop", Enabled: true}})
 	w := serve(t, h, http.MethodGet, "/api/occurrences?"+day+"&merge=1h", "")
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	if got := decodeReply(t, w).Occurrences; len(got) != 1 || len(got[0].Spans) != 1 || got[0].Spans[0].Count != 24 ||
@@ -240,7 +240,7 @@ func TestPreviewRule_Invalid(t *testing.T) {
 	for _, body := range []string{
 		`{"rule":"RRULE:FREQ=DAILY"}`,
 		`{"rule":"DTSTART:20260101T000000Z\nRRULE:FREQ=DAILY;BYDAY=XX"}`,
-		`{"rule":"` + jsonLine(hourly) + `","action":"noop"}`,
+		`{"rule":"` + jsonLine(hourly) + `","operation":"noop"}`,
 		`{`,
 	} {
 		if w := serve(t, h, http.MethodPost, "/api/preview", body); w.Code != http.StatusBadRequest ||

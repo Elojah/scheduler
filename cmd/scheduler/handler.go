@@ -85,7 +85,7 @@ func failure(err error) response {
 	case errors.As(err, new(InvalidRequestError)),
 		errors.As(err, new(UnknownOpError)),
 		errors.As(err, new(schedule.InvalidRRuleError)),
-		errors.As(err, new(schedule.UnknownActionError)),
+		errors.As(err, new(schedule.UnknownOperationError)),
 		errors.As(err, new(schedule.NegativeDurationError)),
 		errors.As(err, new(schedule.InvalidParamsError)):
 		code = "invalid"

@@ -33,7 +33,7 @@ const color = (id: string) =>
   ]
 const label = (id: string) => {
   const s = byID.value.get(id)
-  return s ? `${s.action} · ${describe(s.rule)}` : id
+  return s ? `${s.operation} · ${describe(s.rule)}` : id
 }
 
 // events returns the times of the range shown: a span of a single time is an event at it, a span of more an event

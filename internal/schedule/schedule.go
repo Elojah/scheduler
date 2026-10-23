@@ -11,31 +11,31 @@ import (
 	"github.com/google/uuid"
 )
 
-// Schedule runs Action at each time of Rule while Enabled.
+// Schedule runs Operation at each time of Rule while Enabled.
 type Schedule struct {
 	// ID is a UUIDv7 that Create assigns, so that IDs sort by creation.
 	ID uuid.UUID `json:"id"`
 	// Rule is a recurrence set as RFC 5545 writes it, read by rrule.ParseSet: a DTSTART line, then RRULE, RDATE,
 	// EXDATE or EXRULE lines. It is kept as given.
 	Rule string `json:"rule"`
-	// Action is the key of the Action to run, in the Service's Actions.
-	Action  string  `json:"action"`
-	Options Options `json:"options"`
-	Enabled bool    `json:"enabled"`
+	// Operation is the key of the Operation to run, in the Service's Operations.
+	Operation string  `json:"operation"`
+	Options   Options `json:"options"`
+	Enabled   bool    `json:"enabled"`
 }
 
-// Options tunes a Schedule's alarm, and holds its action's params. A zero duration leaves the alarm's default.
+// Options tunes a Schedule's alarm, and holds its operation's params. A zero duration leaves the alarm's default.
 type Options struct {
-	// MaxDelay drops a time passed by more than it, rather than running the action late (middleware.MaxDelay).
+	// MaxDelay drops a time passed by more than it, rather than running the operation late (middleware.MaxDelay).
 	MaxDelay Duration `json:"max_delay,omitzero"`
-	// Coalesce runs the action only for the latest of a run of times passed by more than it (alarm.WithCoalesce).
+	// Coalesce runs the operation only for the latest of a run of times passed by more than it (alarm.WithCoalesce).
 	Coalesce Duration `json:"coalesce,omitzero"`
 	// Spin busy-waits the last of it before each time, to the microsecond rather than the millisecond, taking a core
 	// meanwhile (holder.NewSpin).
 	Spin Duration `json:"spin,omitzero"`
 	// Poll bounds a wait, so that a clock step or a suspend shows within it: a minute by default (alarm.WithPoll).
 	Poll Duration `json:"poll,omitzero"`
-	// Params is handed to the action as is.
+	// Params is handed to the operation as is.
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
@@ -82,20 +82,20 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// SameTuning reports whether o and other build the same alarm: all but Params, which the alarm's action gets.
+// SameTuning reports whether o and other build the same alarm: all but Params, which the alarm's operation gets.
 func (o Options) SameTuning(other Options) bool {
 	return o.MaxDelay == other.MaxDelay && o.Coalesce == other.Coalesce && o.Spin == other.Spin && o.Poll == other.Poll
 }
 
-// Parse returns s's rule, or an InvalidRRuleError, UnknownActionError, NegativeDurationError or InvalidParamsError if
-// s cannot run with actions.
-func (s Schedule) Parse(actions Actions) (rrule.Set, error) {
+// Parse returns s's rule, or an InvalidRRuleError, UnknownOperationError, NegativeDurationError or InvalidParamsError
+// if s cannot run with operations.
+func (s Schedule) Parse(operations Operations) (rrule.Set, error) {
 	set, err := rrule.ParseSet(s.Rule)
 	if err != nil {
 		return rrule.Set{}, InvalidRRuleError{RRule: s.Rule, Err: err}
 	}
-	if _, ok := actions[s.Action]; !ok {
-		return rrule.Set{}, UnknownActionError{Action: s.Action}
+	if _, ok := operations[s.Operation]; !ok {
+		return rrule.Set{}, UnknownOperationError{Operation: s.Operation}
 	}
 	o := s.Options
 	if min(o.MaxDelay, o.Coalesce, o.Spin, o.Poll) < 0 {

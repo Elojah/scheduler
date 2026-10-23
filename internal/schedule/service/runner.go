@@ -20,7 +20,7 @@ import (
 // runner rings an alarm per enabled schedule, in a goroutine of its own. Its methods run concurrently for different
 // schedules, not for one, which S's lock of that schedule sees to, and shutdown alone.
 type runner struct {
-	actions schedule.Actions
+	operations schedule.Operations
 
 	// alarms is a map[uuid.UUID]*ringing: each enabled schedule's ID to its alarm, whose Ring returned if its rule
 	// ended.
@@ -37,7 +37,7 @@ type runner struct {
 // ringing is a schedule's alarm.
 type ringing struct {
 	alarm *alarm.Alarm
-	// fn is what each time runs. The alarm holds it, so that update stores a new Action or Params into it, never
+	// fn is what each time runs. The alarm holds it, so that update stores a new Operation or Params into it, never
 	// replacing it.
 	fn *atomic.Pointer[func(ctx context.Context, at time.Time)]
 	// schedule is the one last applied, for update to tell what changed. Its tuning is the one alarm.New took.
@@ -69,7 +69,8 @@ func (r *runner) start(ctx context.Context, s schedule.Schedule, set rrule.Set) 
 }
 
 // update applies s to its alarm, doing only what changed: disabled, it stops the alarm; with none, or a new tuning,
-// which Reset cannot change, it starts another. Else a new Action or Params swaps fn, and a new rule Resets the alarm.
+// which Reset cannot change, it starts another. Else a new Operation or Params swaps fn, and a new rule Resets the
+// alarm.
 func (r *runner) update(ctx context.Context, s schedule.Schedule, set rrule.Set) {
 	if !s.Enabled {
 		r.stop(s.ID)
@@ -86,7 +87,7 @@ func (r *runner) update(ctx context.Context, s schedule.Schedule, set rrule.Set)
 
 	old := rg.schedule
 	rg.schedule = s
-	if old.Action != s.Action || !bytes.Equal(old.Options.Params, s.Options.Params) {
+	if old.Operation != s.Operation || !bytes.Equal(old.Options.Params, s.Options.Params) {
 		rg.fn.Store(r.fire(s).Load())
 	}
 	// False once the old rule ended: its Ring returned.
@@ -95,14 +96,14 @@ func (r *runner) update(ctx context.Context, s schedule.Schedule, set rrule.Set)
 	}
 }
 
-// stop closes id's alarm, if any, without waiting for the action under way.
+// stop closes id's alarm, if any, without waiting for the operation under way.
 func (r *runner) stop(id uuid.UUID) {
 	old, _ := r.alarms.LoadAndDelete(id)
 	closeAlarm(old)
 }
 
 // shutdown closes every alarm, keeps others from starting, and waits until their Rings return. Once ctx is done, it
-// cancels their ctx, which actions get, and returns ctx.Err().
+// cancels their ctx, which operations get, and returns ctx.Err().
 func (r *runner) shutdown(ctx context.Context) error {
 	r.closed.Store(true)
 	r.alarms.Range(func(_, v any) bool {
@@ -133,13 +134,13 @@ func (r *runner) shutdown(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// fire returns what each time of s runs: s's action, with s.
+// fire returns what each time of s runs: s's operation, with s.
 func (r *runner) fire(s schedule.Schedule) *atomic.Pointer[func(ctx context.Context, at time.Time)] {
-	action := r.actions[s.Action]
+	operation := r.operations[s.Operation]
 	fn := func(ctx context.Context, at time.Time) {
-		log.Debug().Stringer("id", s.ID).Str("action", s.Action).Time("at", at).Msg("fired")
-		if err := action(ctx, s, at); err != nil {
-			log.Warn().Err(err).Stringer("id", s.ID).Str("action", s.Action).Time("at", at).Msg("action failed")
+		log.Debug().Stringer("id", s.ID).Str("operation", s.Operation).Time("at", at).Msg("fired")
+		if err := operation(ctx, s, at); err != nil {
+			log.Warn().Err(err).Stringer("id", s.ID).Str("operation", s.Operation).Time("at", at).Msg("operation failed")
 		}
 	}
 	p := &atomic.Pointer[func(ctx context.Context, at time.Time)]{}
@@ -148,13 +149,13 @@ func (r *runner) fire(s schedule.Schedule) *atomic.Pointer[func(ctx context.Cont
 	return p
 }
 
-// options returns the alarm options of o, leaving out zero ones, and recovering a panic in an action.
+// options returns the alarm options of o, leaving out zero ones, and recovering a panic in an operation.
 func (r *runner) options(id uuid.UUID, o schedule.Options) []alarm.Option {
 	dropped := func(_ context.Context, at time.Time, late time.Duration) {
 		log.Debug().Stringer("id", id).Time("at", at).Dur("late", late).Msg("dropped")
 	}
 	middlewares := []alarm.Middleware{middleware.Recover(func(_ context.Context, at time.Time, v any) {
-		log.Error().Stringer("id", id).Time("at", at).Interface("panic", v).Msg("action panicked")
+		log.Error().Stringer("id", id).Time("at", at).Interface("panic", v).Msg("operation panicked")
 	})}
 	if o.MaxDelay > 0 {
 		middlewares = append(middlewares, middleware.MaxDelay(time.Duration(o.MaxDelay), dropped))
@@ -175,7 +176,7 @@ func (r *runner) options(id uuid.UUID, o schedule.Options) []alarm.Option {
 	return options
 }
 
-// closeAlarm closes v's alarm, if v is a *ringing, without waiting for the action under way.
+// closeAlarm closes v's alarm, if v is a *ringing, without waiting for the operation under way.
 func closeAlarm(v any) {
 	if rg, ok := v.(*ringing); ok {
 		_ = rg.alarm.Close()

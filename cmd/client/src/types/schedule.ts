@@ -1,14 +1,14 @@
-// Schedule is the scheduler's: it runs action at each time of rule while enabled.
+// Schedule is the scheduler's: it runs operation at each time of rule while enabled.
 export type Schedule = {
   id: string
   // rule is a recurrence set, as RFC 5545 writes it: a DTSTART line, then RRULE, RDATE, EXDATE or EXRULE lines.
   rule: string
-  action: string
+  operation: string
   options: Options
   enabled: boolean
 }
 
-// Options tunes a schedule's alarm, durations being Go's, such as "1m30s", and holds its action's params.
+// Options tunes a schedule's alarm, durations being Go's, such as "1m30s", and holds its operation's params.
 export type Options = {
   max_delay?: string
   coalesce?: string

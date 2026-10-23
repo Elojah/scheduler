@@ -22,14 +22,14 @@ func (e InvalidRRuleError) Unwrap() error {
 	return e.Err
 }
 
-// UnknownActionError refuses a Schedule whose Action is not in the Service's Actions.
-type UnknownActionError struct {
-	Action string
+// UnknownOperationError refuses a Schedule whose Operation is not in the Service's Operations.
+type UnknownOperationError struct {
+	Operation string
 }
 
 // Error implements error.
-func (e UnknownActionError) Error() string {
-	return "unknown action " + strconv.Quote(e.Action)
+func (e UnknownOperationError) Error() string {
+	return "unknown operation " + strconv.Quote(e.Operation)
 }
 
 // NegativeDurationError refuses Options with a negative duration.
