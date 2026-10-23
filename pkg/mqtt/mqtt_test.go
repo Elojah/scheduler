@@ -145,43 +145,8 @@ type client struct {
 func start(t *testing.T, h mqtt.Handler) *client {
 	t.Helper()
 
-	broker := mochi.New(&mochi.Options{Logger: slog.New(slog.DiscardHandler)})
-	if err := broker.AddHook(new(auth.AllowHook), nil); err != nil {
-		t.Fatal(err)
-	}
-	tcp := listeners.NewTCP(listeners.Config{ID: "tcp", Address: "127.0.0.1:0"})
-	if err := broker.AddListener(tcp); err != nil {
-		t.Fatal(err)
-	}
-	if err := broker.Serve(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = broker.Close()
-	})
-	u := &url.URL{Scheme: "mqtt", Host: tcp.Address()}
-
-	c := &client{svc: &mqtt.Service{Topic: topic, Handler: h}, replies: make(chan *paho.Publish, 16)}
-	if err := c.svc.Dial(t.Context(), mqtt.Config{
-		Broker:       u.String(),
-		ClientID:     "service-" + t.Name(),
-		Prefix:       prefix,
-		Workers:      8,
-		Queue:        64,
-		ReplyTimeout: 10,
-		KeepAlive:    30,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		if err := c.svc.Close(ctx); err != nil {
-			t.Errorf("Close = %v", err)
-		}
-	})
-	await(t, broker)
-
+	svc, u := serve(t, h)
+	c := &client{svc: svc, replies: make(chan *paho.Publish, 16)}
 	cm, err := autopaho.NewConnection(t.Context(), autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{u},
 		CleanStartOnInitialConnection: true,
@@ -208,6 +173,58 @@ func start(t *testing.T, h mqtt.Handler) *client {
 	c.cm = cm
 
 	return c
+}
+
+// serve starts a broker and a Service with h on it, both stopped at the end of the test, and returns the Service and
+// the broker's URL once the Service subscribed.
+func serve(t *testing.T, h mqtt.Handler) (*mqtt.Service, *url.URL) {
+	t.Helper()
+
+	broker, u := listen(t)
+	svc := &mqtt.Service{Topic: topic, Handler: h}
+	if err := svc.Dial(t.Context(), mqtt.Config{
+		Broker:       u.String(),
+		ClientID:     "service-" + t.Name(),
+		Prefix:       prefix,
+		Workers:      8,
+		Queue:        64,
+		ReplyTimeout: 10,
+		KeepAlive:    30,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if err := svc.Close(ctx); err != nil {
+			t.Errorf("Close = %v", err)
+		}
+	})
+	await(t, broker)
+
+	return svc, u
+}
+
+// listen starts a broker, stopped at the end of the test, and returns it with its URL.
+func listen(t *testing.T) (*mochi.Server, *url.URL) {
+	t.Helper()
+
+	broker := mochi.New(&mochi.Options{Logger: slog.New(slog.DiscardHandler)})
+	if err := broker.AddHook(new(auth.AllowHook), nil); err != nil {
+		t.Fatal(err)
+	}
+	tcp := listeners.NewTCP(listeners.Config{ID: "tcp", Address: "127.0.0.1:0"})
+	if err := broker.AddListener(tcp); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.Serve(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = broker.Close()
+	})
+
+	return broker, &url.URL{Scheme: "mqtt", Host: tcp.Address()}
 }
 
 // await returns once someone subscribed to the request topics of broker.

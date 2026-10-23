@@ -17,3 +17,17 @@ type Config struct {
 	// KeepAlive is in seconds, 0 to disable it.
 	KeepAlive uint16 `env:"MQTT_KEEP_ALIVE" env-default:"30" json:"keep_alive"`
 }
+
+// ClientConfig is a Client's config.
+type ClientConfig struct {
+	// Broker is the broker's URL, mqtt:// or tls://.
+	Broker string `env:"MQTT_BROKER" env-default:"mqtt://localhost:1883" json:"broker"`
+	// ClientID is required: it names the topic replies come to, replies/<ClientID>.
+	ClientID string `env:"MQTT_CLIENT_ID" json:"client_id"`
+	// Prefix is the Service's: what comes before <Topic>/<op> in request topics, if any.
+	Prefix string `env:"MQTT_PREFIX" json:"prefix"`
+	// Timeout bounds, in seconds, how long a request waits for its reply, and a SUBSCRIBE for its acknowledgement.
+	Timeout uint32 `env:"MQTT_TIMEOUT" env-default:"10" json:"timeout"`
+	// KeepAlive is in seconds, 0 to disable it.
+	KeepAlive uint16 `env:"MQTT_KEEP_ALIVE" env-default:"30" json:"keep_alive"`
+}

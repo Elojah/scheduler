@@ -1,0 +1,18 @@
+{
+	"log": {
+		"level": "info"
+	},
+	"http": {
+		"address": ":8080"
+	},
+	"web": {
+		"static": "/app/static"
+	},
+	"mqtt": {
+		"broker": "mqtt://mosquitto:1883",
+		"client_id": "web_client",
+		"prefix": "scheduler/v1",
+		"timeout": 10,
+		"keep_alive": 30
+	}
+}

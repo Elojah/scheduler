@@ -36,6 +36,23 @@ services:
     networks:
       - scheduler_network
 
+  # Web UI, on localhost:8080
+  web_client:
+    build:
+      context: .
+      dockerfile: docker/web_client/Dockerfile
+    container_name: scheduler_web_client
+    hostname: web_client
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    volumes:
+      - ./config/web_client/docker.json:/app/docker.json:ro
+    networks:
+      - scheduler_network
+    ports:
+      - "8080:8080"
+
 networks:
   scheduler_network:
 

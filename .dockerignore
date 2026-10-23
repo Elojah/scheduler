@@ -1,5 +1,7 @@
 # Build output and local databases
 bin/
+**/node_modules/
+cmd/client/dist/
 *.db
 *.db-shm
 *.db-wal

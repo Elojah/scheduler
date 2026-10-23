@@ -25,3 +25,28 @@ jobs:
 
       - name: Lint and test
         run: make check
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/client
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: cmd/client/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Format
+        run: npx prettier --check src/
+
+      - name: Type-check and build
+        run: npm run build

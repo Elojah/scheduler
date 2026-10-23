@@ -8,7 +8,8 @@
 
 Runs an action at each time of a recurrence rule, for schedules kept in SQLite and managed over MQTT v5. It glues
 [rrule](https://github.com/elojah/rrule), which expands RFC 5545 rules, and [alarm](https://github.com/elojah/alarm),
-which fires a func at each of their times, one alarm per schedule.
+which fires a func at each of their times, one alarm per schedule. A web UI manages them too, and shows their times
+on a calendar.
 
 ```sh
 docker compose up -d mosquitto
@@ -72,6 +73,38 @@ A refused request gets `{"error": {"code": …, "message": …}}`:
 | `not_found` | No schedule has the id. |
 | `internal` | The database failed. |
 
+## Web UI
+
+`cmd/web_client` serves the web UI, built from `cmd/client` (Vue 3, PrimeVue, FullCalendar), and an HTTP API that
+forwards to the scheduler over MQTT v5, as a client of the same broker. The UI lists the schedules, creates, edits,
+enables and deletes them, and previews a rule's next times as it is typed. Its calendar shows the times of the enabled
+schedules, by day, week or month.
+
+```sh
+docker compose up -d mosquitto
+make run             # the scheduler
+make client          # cmd/client/dist, with npm
+make run-web_client  # http://localhost:8080
+```
+
+`npm run dev` in `cmd/client` serves the UI with hot reload on http://localhost:5173, proxying `/api` to the web
+client.
+
+| Route | Does |
+| --- | --- |
+| `POST /api/schedules/{op}` | Forwards the body to the scheduler's op, `create`, `get`, `list`, `update` or `delete`, and replies with its reply. |
+| `GET /api/occurrences?from=…&to=…&merge=15m` | The times of each enabled schedule in a range of at most 62 days, RFC 3339 bounds: `{"occurrences": [{id, spans: [{start, end, count}], next, truncated}]}`. Times at most `merge` apart, 15m by default, are merged into a span. Past 10 000 times in the range, the last span lasts until its end, and `truncated` is set. |
+| `POST /api/preview` | `{"rule": …}`: the rule's next 5 times, `{"times": […]}`, read as the scheduler reads it. |
+
+Times are expanded by rrule, as the scheduler's alarms expand them. A past time shown ran only if its schedule was
+enabled, and the scheduler up, then.
+
+A refused request gets the scheduler's `{"error": {"code": …, "message": …}}`, with an HTTP status: `invalid` 400,
+`not_found` 404, `internal` 500, and `unavailable` 503 or `timeout` 504 when the scheduler cannot be reached.
+
+The web client has no auth, as the broker has none: whoever reaches it manages the schedules. It refuses the requests
+of another site's pages (`http.CrossOriginProtection`).
+
 ## Behaviour worth knowing
 
 - **Times start at now.** A schedule created, updated or loaded at startup runs from the next time of its rule:
@@ -103,16 +136,31 @@ neither takes its default. Logs are JSON, on stdout.
 | `mqtt.reply_timeout` | `MQTT_REPLY_TIMEOUT` | `10`, in seconds, for the broker to acknowledge a reply |
 | `mqtt.keep_alive` | `MQTT_KEEP_ALIVE` | `30`, in seconds, `0` to disable it |
 
+The web client reads `web_client [config.json]` the same way, `config/web_client/local.json` for `make run-web_client`:
+
+| Key | Env | Default |
+| --- | --- | --- |
+| `log.level` | `LOG_LEVEL` | `info` |
+| `http.address` | `HTTP_ADDRESS` | `:8080` |
+| `web.static` | `WEB_STATIC` | `/app/static`, the built client |
+| `mqtt.broker` | `MQTT_BROKER` | `mqtt://localhost:1883` |
+| `mqtt.client_id` | `MQTT_CLIENT_ID` | none: required, unique among the broker's clients. Replies come to `replies/<client_id>` |
+| `mqtt.prefix` | `MQTT_PREFIX` | none: the scheduler's |
+| `mqtt.timeout` | `MQTT_TIMEOUT` | `10`, in seconds, for the scheduler to reply |
+| `mqtt.keep_alive` | `MQTT_KEEP_ALIVE` | `30`, in seconds, `0` to disable it |
+
 ## Layout
 
 | Path | Holds |
 | --- | --- |
 | `cmd/scheduler` | The binary: config, wiring, and the MQTT API, one file per op. |
+| `cmd/web_client` | The web UI's server: the built client, and the HTTP API, one file per endpoint. |
+| `cmd/client` | The web UI: Vue 3, PrimeVue, FullCalendar, built by Vite. |
 | `internal/schedule` | The domain: `Schedule`, the `Store` and `Service` interfaces, their errors and mocks. |
 | `internal/schedule/service` | `service.S`, which rings an alarm per enabled schedule. |
 | `internal/schedule/sqlite` | The `Store`, on SQLite. |
-| `pkg/` | Libraries with no knowledge of schedules: `config`, `log`, `mqtt`, `shutdown`, `sqlite`. |
-| `docker/` | The scheduler's Dockerfile and the broker's conf, for `docker-compose.yml`. |
+| `pkg/` | Libraries with no knowledge of schedules: `config`, `http`, `log`, `mqtt`, `shutdown`, `sqlite`. |
+| `docker/` | The scheduler's and the web client's Dockerfiles, and the broker's conf, for `docker-compose.yml`. |
 
 ## Development
 
@@ -121,12 +169,16 @@ make check     # lint, and tests with -race
 make build     # bin/scheduler, without cgo: GOOS=linux GOARCH=arm64 make build cross-compiles
 make run       # with config/scheduler/local.json, on the broker at localhost:1883
 make generate  # the moq mocks of internal/, after an interface changed
+
+make client          # the web UI, into cmd/client/dist: npm ci, type-check, build
+make web_client      # bin/web_client
+make run-web_client  # with config/web_client/local.json, on localhost:8080
 ```
 
 ## Docker
 
 ```sh
-docker compose up -d --build    # mosquitto on localhost:1883, and the scheduler on it
+docker compose up -d --build    # mosquitto on localhost:1883, the scheduler on it, and the web UI on localhost:8080
 docker compose up -d mosquitto  # the broker alone, for make run
 ```
 
@@ -134,6 +186,9 @@ docker compose up -d mosquitto  # the broker alone, for make run
 `config/scheduler/docker.json` mounted at `/app/docker.json`: the environment still wins over it. Schedules are kept in
 the `data` volume, at `/data/scheduler.db`. The builder cross-compiles:
 `docker buildx build --platform linux/arm64 -f docker/scheduler/Dockerfile .`.
+
+`docker/web_client/Dockerfile` builds the client with node, then the binary, into a `scratch` image as well, with
+`config/web_client/docker.json` mounted at `/app/docker.json`.
 
 ## License
 

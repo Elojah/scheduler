@@ -3,8 +3,10 @@ GOFMT              = gofmt
 # Pure Go, SQLite included: the binary cross-compiles, such as GOOS=linux GOARCH=arm64 make build.
 CGO_ENABLED       ?= 0
 BIN                = bin/scheduler
+BIN_WEB            = bin/web_client
 VERSION           ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 CONFIG            ?= config/scheduler/local.json
+CONFIG_WEB        ?= config/web_client/local.json
 
 # For CI
 ifneq ($(wildcard ./bin/golangci-lint),)
@@ -49,11 +51,26 @@ build: ## Build bin/scheduler, without cgo
 	$(info $(M) building $(BIN)) @
 	$Q CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '-X main.version=$(VERSION)' -o $(BIN) ./cmd/scheduler
 
+.PHONY: web_client
+web_client: ## Build bin/web_client, without cgo
+	$(info $(M) building $(BIN_WEB)) @
+	$Q CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '-X main.version=$(VERSION)' -o $(BIN_WEB) ./cmd/web_client
+
+.PHONY: client
+client: ## Build the web UI into cmd/client/dist
+	$(info $(M) building client) @
+	$Q cd cmd/client && npm ci --no-audit --no-fund && npm run build
+
 # Run
 .PHONY: run
 # A broker: docker compose up -d mosquitto
 run: ## Run the scheduler with CONFIG (config/scheduler/local.json), on the broker at localhost:1883
 	$Q $(GO) run ./cmd/scheduler $(CONFIG)
+
+.PHONY: run-web_client
+# The client: make client, or npm run dev in cmd/client, which proxies /api to it
+run-web_client: ## Run the web UI with CONFIG_WEB (config/web_client/local.json) on localhost:8080
+	$Q $(GO) run ./cmd/web_client $(CONFIG_WEB)
 
 # Generate (mocks)
 .PHONY: generate
