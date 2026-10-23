@@ -18,6 +18,7 @@ package service
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -30,13 +31,15 @@ var _ schedule.Service = (*S)(nil)
 // S keeps schedules in Store, and rings an alarm per enabled one, running one of Actions. Set Store and Actions, then
 // Dial before any other call. Get and List are Store's.
 //
-// Its methods run concurrently, but changes of one schedule must not, else the store and the alarm could each keep a
-// different one: the API serves one request at a time.
+// Its methods run concurrently. A change of a schedule holds its lock over the store and the alarm, so that both keep
+// the same one, without waiting for changes of others, but those sharing its lock.
 type S struct {
 	schedule.Store
 
 	Actions schedule.Actions
 
+	// locks has a lock per last byte of an ID, which is random in a UUIDv7: one for 256 schedules, rather than a map.
+	locks  [256]sync.Mutex
 	runner *runner
 }
 
@@ -77,6 +80,8 @@ func (s *S) Create(ctx context.Context, sc schedule.Schedule) (schedule.Schedule
 		return schedule.Schedule{}, err
 	}
 
+	// Locked though new: List shows sc once stored, for a Delete to come before start.
+	defer s.lock(sc.ID).Unlock()
 	if err := s.Store.Create(ctx, sc); err != nil {
 		return schedule.Schedule{}, err
 	}
@@ -97,6 +102,7 @@ func (s *S) Update(ctx context.Context, sc schedule.Schedule) (schedule.Schedule
 		return schedule.Schedule{}, err
 	}
 
+	defer s.lock(sc.ID).Unlock()
 	if err := s.Store.Update(ctx, sc); err != nil {
 		return schedule.Schedule{}, err
 	}
@@ -107,6 +113,7 @@ func (s *S) Update(ctx context.Context, sc schedule.Schedule) (schedule.Schedule
 
 // Delete removes the schedule of id, and stops its alarm. The action under way finishes.
 func (s *S) Delete(ctx context.Context, id uuid.UUID) error {
+	defer s.lock(id).Unlock()
 	if err := s.Store.Delete(ctx, id); err != nil {
 		return err
 	}
@@ -119,4 +126,12 @@ func (s *S) Delete(ctx context.Context, id uuid.UUID) error {
 // returns ctx.Err(). Call it once no other call is under way: changes after it are stored, but ring no alarm.
 func (s *S) Close(ctx context.Context) error {
 	return s.runner.shutdown(ctx)
+}
+
+// lock locks id's lock, and returns it.
+func (s *S) lock(id uuid.UUID) *sync.Mutex {
+	mu := &s.locks[id[len(id)-1]]
+	mu.Lock()
+
+	return mu
 }

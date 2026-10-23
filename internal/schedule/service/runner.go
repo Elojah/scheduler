@@ -18,16 +18,18 @@ import (
 )
 
 // runner rings an alarm per enabled schedule, in a goroutine of its own. Its methods run concurrently for different
-// schedules, not for one, and shutdown alone.
+// schedules, not for one, which S's lock of that schedule sees to, and shutdown alone.
 type runner struct {
 	actions schedule.Actions
 
-	// alarms maps each enabled schedule's ID to its *ringing, whose Ring returned if its rule ended.
+	// alarms is a map[uuid.UUID]*ringing: each enabled schedule's ID to its alarm, whose Ring returned if its rule
+	// ended.
 	alarms sync.Map
-	// live maps each *ringing whose Ring has not returned, those replaced or stopped included, to the
-	// context.CancelFunc of Ring's ctx, for shutdown to cancel.
+	// live is a map[*ringing]context.CancelFunc: each alarm whose Ring has not returned, those replaced or stopped
+	// included, to the cancel of Ring's ctx, for shutdown to call.
 	live sync.Map
-	wg   sync.WaitGroup
+
+	wg sync.WaitGroup
 	// closed is set by shutdown: no alarm starts after.
 	closed atomic.Bool
 }

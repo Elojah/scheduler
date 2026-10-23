@@ -8,6 +8,10 @@
 	"mqtt": {
 		"broker": "mqtt://mosquitto:1883",
 		"client_id": "scheduler",
-		"prefix": "scheduler/v1"
+		"prefix": "scheduler/v1",
+		"workers": 8,
+		"queue": 64,
+		"reply_timeout": 10,
+		"keep_alive": 30
 	}
 }

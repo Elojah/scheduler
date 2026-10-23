@@ -21,7 +21,7 @@ func (s *Service) Dial(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	// One writer: SQLite has one anyway, and the callers serialize changes.
+	// One writer: SQLite has one anyway.
 	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		return errors.Join(err, db.Close())

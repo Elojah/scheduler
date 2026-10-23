@@ -48,10 +48,13 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
 
 ## Invariants
 
-- `service.S` has no lock: changes of different schedules run concurrently. It writes the store before touching the
-  runner, so that a refused change leaves the alarms as they were. Changes of one schedule must not race, else the
-  store and the alarm could each keep a different one (an Update racing a Delete leaves an alarm): the API's one loop
-  serializes them. Close runs once requests stopped, which `main`'s Closers order does.
+- A change of a schedule (Create, Update, Delete) holds its lock in `service.S` over the store write and the runner
+  step, else the store and the alarm could each keep a different one (an Update racing a Delete leaves an alarm).
+  `S.locks` is a `[256]sync.Mutex` picked by the ID's last byte, random in a UUIDv7: no map to grow or clean, and
+  changes of other schedules run meanwhile, but for those sharing the lock. The runner has no lock of its own: it
+  relies on that one for each schedule, and on `sync.Map`s across them. `S` writes the store before touching the
+  runner, so that a refused change leaves the alarms as they were. Close runs once requests stopped, which `main`'s
+  Closers order does.
 - `runner.update` does only what changed: disabled, it stops the alarm; with none or a new tuning (MaxDelay,
   Coalesce, Spin, Poll), it starts another. Else a new Action or Params swaps `ringing.fn`, the callback the alarm
   loads at each time, and a new rule Resets the alarm, starting another once Reset returns false (the old rule
@@ -62,10 +65,11 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
   (a `sync.Map`, which a Ring leaves when it returns) maps every Ring not returned, replaced and stopped ones
   included, to its ctx's cancel, so that `shutdown` cancels them all once its ctx is done.
 - `closed` (atomic) keeps alarms from starting after `shutdown`.
-- `pkg/mqtt`'s `OnPublishReceived` never blocks: it queues requests (64) for one loop, and drops them when full, so
-  that paho reads on, the PUBACKs of the loop's replies included. One loop keeps requests in order. Its connection
-  runs on a ctx detached from Dial's, which is the init timeout. Close waits for the request under way and its
-  reply before it disconnects.
+- `pkg/mqtt`'s `OnPublishReceived` never blocks: it queues requests (`Config.Queue`, 64) for `Config.Workers` (8),
+  and drops them when full, so that paho reads on, the PUBACKs of the workers' replies included. Requests are served
+  in no given order, the handler concurrently: `service.S`'s per-schedule locks keep changes of one schedule
+  consistent. Its connection runs on a ctx detached from Dial's, which is the init timeout. Close waits for the
+  requests under way and their replies before it disconnects.
 - `pkg/sqlite` holds one connection, and the Store binds `options` as text: a `[]byte` would be a BLOB, which a
   STRICT TEXT column refuses.
 

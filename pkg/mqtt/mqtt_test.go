@@ -65,8 +65,34 @@ func TestDial_NoResponseTopic(t *testing.T) {
 	if got := c.request(t, "b", ""); got != "b" {
 		t.Errorf("reply %q, want b's", got)
 	}
-	if got := []string{<-served, <-served}; !slices.Equal(got, []string{"a", "b"}) {
-		t.Errorf("served %q, want a then b", got)
+	// Served in no given order.
+	if got := []string{<-served, <-served}; !slices.Equal(slices.Sorted(slices.Values(got)), []string{"a", "b"}) {
+		t.Errorf("served %q, want a and b", got)
+	}
+}
+
+// TestDial_Concurrent: a request is served while another is under way.
+func TestDial_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	started, release := make(chan struct{}), make(chan struct{})
+	c := start(t, func(_ context.Context, op string, _ []byte) []byte {
+		if op == "slow" {
+			close(started)
+			<-release
+		}
+
+		return []byte(op)
+	})
+	slow := c.send(t, "slow", "")
+	<-started
+
+	if got := c.request(t, "fast", ""); got != "fast" {
+		t.Errorf("reply %q, want fast's", got)
+	}
+	close(release)
+	if got := c.reply(t, "slow", slow); got != "slow" {
+		t.Errorf("reply %q, want slow's", got)
 	}
 }
 
@@ -136,7 +162,15 @@ func start(t *testing.T, h mqtt.Handler) *client {
 	u := &url.URL{Scheme: "mqtt", Host: tcp.Address()}
 
 	c := &client{svc: &mqtt.Service{Topic: topic, Handler: h}, replies: make(chan *paho.Publish, 16)}
-	if err := c.svc.Dial(t.Context(), mqtt.Config{Broker: u.String(), ClientID: "service-" + t.Name(), Prefix: prefix}); err != nil {
+	if err := c.svc.Dial(t.Context(), mqtt.Config{
+		Broker:       u.String(),
+		ClientID:     "service-" + t.Name(),
+		Prefix:       prefix,
+		Workers:      8,
+		Queue:        64,
+		ReplyTimeout: 10,
+		KeepAlive:    30,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

@@ -15,21 +15,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	// queue is how many requests wait for the one under way before the next are dropped.
-	queue = 64
-	// replyTimeout bounds how long a reply waits for the broker's acknowledgement.
-	replyTimeout = 10 * time.Second
-	// keepAlive is in seconds.
-	keepAlive = 30
-)
-
 // Handler serves a request's payload, op being the last level of its topic, and returns the reply's payload, JSON, or
 // nil to send none.
 type Handler func(ctx context.Context, op string, payload []byte) []byte
 
-// Service serves the requests on <Prefix>/<Topic>/<op> with Handler, one at a time, in order. Set Topic and Handler
-// before Dial.
+// Service serves the requests on <Prefix>/<Topic>/<op> with Handler, Workers at once, in no given order: Handler must
+// be safe for concurrent use. Set Topic and Handler before Dial.
 type Service struct {
 	Topic   string
 	Handler Handler
@@ -37,12 +28,14 @@ type Service struct {
 	cm *autopaho.ConnectionManager
 	// prefix is what a request's topic starts with, before its op.
 	prefix string
+	// replyTimeout is Config.ReplyTimeout.
+	replyTimeout time.Duration
 	// cancel cancels the ctx of the connection and of the requests.
 	cancel context.CancelFunc
-	// stop is closed by Close, once: the loop takes no request after.
+	// stop is closed by Close, once: the workers take no request after.
 	stop     chan struct{}
 	stopOnce sync.Once
-	// done is closed once the loop returned.
+	// done is closed once every worker returned.
 	done chan struct{}
 }
 
@@ -60,13 +53,14 @@ func (s *Service) Dial(ctx context.Context, cfg Config) error {
 	if cfg.Prefix != "" {
 		s.prefix = cfg.Prefix + "/" + s.prefix
 	}
+	s.replyTimeout = time.Duration(cfg.ReplyTimeout) * time.Second
 
 	// The connection outlives Dial's ctx, until Close.
 	ctx, s.cancel = context.WithCancel(context.WithoutCancel(ctx)) //nolint:gosec // Close calls it, or Dial on failure
-	requests := make(chan *paho.Publish, queue)
+	requests := make(chan *paho.Publish, cfg.Queue)
 	cm, err := autopaho.NewConnection(ctx, autopaho.ClientConfig{
 		ServerUrls: []*url.URL{broker},
-		KeepAlive:  keepAlive,
+		KeepAlive:  cfg.KeepAlive,
 		// Requests queued while the service was down are stale: their clients gave up.
 		CleanStartOnInitialConnection: true,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
@@ -100,13 +94,20 @@ func (s *Service) Dial(ctx context.Context, cfg Config) error {
 	}
 	s.cm = cm
 	s.stop, s.done = make(chan struct{}), make(chan struct{})
-	go s.serve(ctx, requests)
+	var wg sync.WaitGroup
+	for range cfg.Workers {
+		wg.Go(func() { s.serve(ctx, requests) })
+	}
+	go func() {
+		wg.Wait()
+		close(s.done)
+	}()
 
 	return nil
 }
 
-// Close stops taking requests, waits for the one under way and its reply, then disconnects. Once ctx is done, it
-// cancels the request under way, and returns ctx.Err(). A second Close returns at once.
+// Close stops taking requests, waits for those under way and their replies, then disconnects. Once ctx is done, it
+// cancels the requests under way, and returns ctx.Err(). A second Close returns at once.
 func (s *Service) Close(ctx context.Context) error {
 	if s.cm == nil {
 		return nil
@@ -121,10 +122,8 @@ func (s *Service) Close(ctx context.Context) error {
 	return s.cm.Disconnect(ctx)
 }
 
-// serve handles requests until Close.
+// serve handles requests until Close, as one of the workers.
 func (s *Service) serve(ctx context.Context, requests <-chan *paho.Publish) {
-	defer close(s.done)
-
 	for {
 		select {
 		case <-s.stop:
@@ -137,7 +136,7 @@ func (s *Service) serve(ctx context.Context, requests <-chan *paho.Publish) {
 
 // subscribe subscribes to the request topics, once per connection.
 func (s *Service) subscribe(ctx context.Context, cm *autopaho.ConnectionManager) {
-	ctx, cancel := context.WithTimeout(ctx, replyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, s.replyTimeout)
 	defer cancel()
 
 	if _, err := cm.Subscribe(ctx, &paho.Subscribe{
@@ -158,7 +157,7 @@ func (s *Service) handle(ctx context.Context, p *paho.Publish) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, replyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, s.replyTimeout)
 	defer cancel()
 
 	if _, err := s.cm.Publish(ctx, &paho.Publish{

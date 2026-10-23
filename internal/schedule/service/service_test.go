@@ -377,6 +377,48 @@ func TestParallel(t *testing.T) {
 	})
 }
 
+// TestParallel_Delete: updates of one schedule racing its Delete leave no alarm, whichever stored first.
+func TestParallel_Delete(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		svc, fired := newService(t)
+		sc, err := svc.Create(t.Context(), schedule.Schedule{Rule: everySecond, Action: "a", Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var wg sync.WaitGroup
+		for _, change := range []func(sc *schedule.Schedule){
+			func(sc *schedule.Schedule) { sc.Rule = everyTwoSeconds },
+			func(sc *schedule.Schedule) { sc.Action = "b" },
+			func(sc *schedule.Schedule) { sc.Options.MaxDelay = schedule.Duration(time.Second) },
+			func(sc *schedule.Schedule) { sc.Enabled = false },
+		} {
+			wg.Go(func() {
+				sc := sc
+				change(&sc)
+				if _, err := svc.Update(t.Context(), sc); err != nil && !errors.Is(err, schedule.NotFoundError{ID: sc.ID}) {
+					t.Error(err)
+				}
+			})
+		}
+		wg.Go(func() {
+			if err := svc.Delete(t.Context(), sc.ID); err != nil {
+				t.Error(err)
+			}
+		})
+		wg.Wait()
+		synctest.Wait()
+
+		before := fired.count()
+		time.Sleep(3 * time.Second)
+		if after := fired.count(); after != before {
+			t.Errorf("fired %d times after the schedule was deleted", after-before)
+		}
+	})
+}
+
 // TestClose: Close waits for the actions under way, and cancels their ctx once its own is done.
 func TestClose(t *testing.T) {
 	t.Parallel()

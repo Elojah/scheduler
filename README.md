@@ -81,8 +81,8 @@ A refused request gets `{"error": {"code": …, "message": …}}`:
   created. A new action or params applies from the next time, the alarm's times left as they were.
 - **An action runs in its schedule's alarm goroutine**: a slow one makes the next times of its schedule late, not
   those of others. `max_delay` and `coalesce` drop such late times.
-- **Disable and delete never wait**: the action under way finishes. On SIGHUP, SIGINT or SIGTERM, the request under
-  way is replied to, then actions under way get 5s in all before their ctx is cancelled.
+- **Disable and delete never wait**: the action under way finishes. On SIGHUP, SIGINT or SIGTERM, the requests
+  under way are replied to, then actions under way get 5s in all before their ctx is cancelled.
 - **Alarms ring whether the broker is up or not**: the scheduler reconnects on its own.
 - **`DTSTART` is required**: a bare `FREQ=…` has no time to start from.
 
@@ -98,6 +98,10 @@ neither takes its default. Logs are JSON, on stdout.
 | `mqtt.broker` | `MQTT_BROKER` | `mqtt://localhost:1883`, or `tls://…` |
 | `mqtt.client_id` | `MQTT_CLIENT_ID` | none: required |
 | `mqtt.prefix` | `MQTT_PREFIX` | none: topics are then `schedules/<op>` |
+| `mqtt.workers` | `MQTT_WORKERS` | `8`, requests served at once |
+| `mqtt.queue` | `MQTT_QUEUE` | `64`, requests waiting for a worker before the next are dropped |
+| `mqtt.reply_timeout` | `MQTT_REPLY_TIMEOUT` | `10`, in seconds, for the broker to acknowledge a reply |
+| `mqtt.keep_alive` | `MQTT_KEEP_ALIVE` | `30`, in seconds, `0` to disable it |
 
 ## Layout
 
