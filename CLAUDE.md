@@ -1,8 +1,8 @@
 # CLAUDE.md
 
 `github.com/elojah/scheduler`, a service gluing `../rrule` and `../alarm`: Schedules kept in SQLite, an alarm per
-enabled one running its operation, CRUD over MQTT v5, and a web UI over it. Go 1.26.1. Laid out and run as `../trax`,
-its client stripped down. Behaviour is in godoc and the README, plans in TODO.md.
+enabled one running its operation, such as reading a `../sunspec` device, CRUD over MQTT v5, and a web UI over it. Go
+1.26.1. Laid out and run as `../trax`, its client stripped down. Behaviour is in godoc and the README, plans in TODO.md.
 
 ## Layout
 
@@ -22,13 +22,16 @@ its client stripped down. Behaviour is in godoc and the README, plans in TODO.md
   committed).
 - `internal/schedule/service/`: `service.S` (the Service) and `runner.go` (an alarm per schedule).
 - `internal/schedule/sqlite/`: the `Store`, embedding a `pkg/sqlite.Service`, schema in `schema.sql`.
+- `internal/schedule/sunspec/`: `Read`, the `sunspec_read` Operation (wired in `cmd/scheduler/main.go`), decoding its
+  `Params` strictly at each time, and `ReadPoints`, which dials, `Discover`s and reads, closing the connection after.
 - `pkg/`: libraries with no knowledge of schedules. `config` (cleanenv), `log` (zerolog), `shutdown` (Closers),
   `sqlite` (modernc.org/sqlite, pure Go, so that `CGO_ENABLED=0` builds), `http` (a `net/http` server as a part,
   imported as `thttp`), and `mqtt` (request/response over paho.golang's autopaho: `Service` serves, `Client`
   requests).
 - `docker/`: `scheduler/Dockerfile` (cross-compiling builder, `scratch` runner as uid 65532, the database in `/data`),
   `web_client/Dockerfile` (node builds the client, then the same) and `mosquitto/mosquitto.conf`, for
-  `docker-compose.yml`, which mounts `config/{scheduler,web_client}/docker.json`.
+  `docker-compose.yml`, which mounts `config/{scheduler,web_client}/docker.json`. Its `sunspec` service, on port 502,
+  is `../sunspec`'s `cmd/simulator`, built from a Git URL at a tag: bump it with go.mod's sunspec.
 - Imports go `cmd` → `internal`, `pkg`. `pkg` never imports `internal`.
 
 ## Commands
@@ -41,9 +44,11 @@ make run             # CONFIG=config/scheduler/local.json, broker at localhost:1
 make generate        # moq mocks, after an interface in internal/ changed (moq in ~/go/bin)
 make client          # cmd/client/dist: npm ci, vue-tsc, vite build
 make run-web_client  # CONFIG_WEB=config/web_client/local.json, on localhost:8080
+make run-simulator   # sunspec's cmd/simulator at go.mod's version, Modbus TCP on localhost:1502, a day every 10m
 cd cmd/client && npm run dev  # hot reload on :5173, /api proxied to :8080
 cd cmd/client && npx prettier --check src/  # CI checks it
-docker compose up -d --build  # mosquitto on localhost:1883, the scheduler, the web UI on :8080; `up -d mosquitto` for make run
+docker compose up -d --build  # mosquitto on localhost:1883, the scheduler, the web UI on :8080, the simulator on :502;
+                              # `up -d mosquitto` for make run
 ```
 
 Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests included. Mind `nlreturn`,
@@ -101,13 +106,15 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
 
 ## Tests
 
-- External test packages, except `cmd/scheduler` and `cmd/web_client` (`package main`, which testpackage allows). Name a test after its
-  method, with a suffix for a case: `TestUpdate_Reset`. Each package's `TestMain` silences zerolog.
+- External test packages, except `cmd/scheduler` and `cmd/web_client` (`package main`, which testpackage allows).
+  Name a test after its method, with a suffix for a case: `TestUpdate_Reset`. Each package's `TestMain` silences
+  zerolog.
 - `service` tests run in a `synctest` bubble on an in-memory Store, with operations logging what they run, and `slow`
   when it ran too, which tells a Reset (the next time runs once the operation returns) from a new alarm (it runs
   meanwhile): `TestUpdate_Reset` against `TestUpdate_Options`. `holder.Spin` never ends in a bubble: no test spins.
 - `cmd/web_client` tests `routes()` with `httptest` and a `fake` requester, a func: no broker.
 - `cmd/client` has no tests: CI runs prettier, `vue-tsc` and `vite build`.
+- `internal/schedule/sunspec` serves a `simulator.Simulator` with `modbus.Serve` on `127.0.0.1:0`, on the real clock.
 - `sqlite`, `pkg/mqtt` and `cmd/scheduler` run on the real clock. SQLite runs in `t.TempDir()`. mochi-mqtt runs in
   process on `127.0.0.1:0`, with `await` polling its subscriptions until the Service subscribed. `cmd/scheduler`
   calls `handler.serve` directly, with no broker, and uses `schedule.ServiceMock` for `internal`.

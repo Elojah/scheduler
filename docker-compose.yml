@@ -53,6 +53,22 @@ services:
     ports:
       - "8080:8080"
 
+  # A simulated SunSpec inverter, Modbus TCP on localhost:502, built from sunspec at go.mod's version
+  sunspec:
+    build:
+      context: https://github.com/Elojah/sunspec.git#v1.2.0
+      dockerfile: cmd/simulator/Dockerfile
+    container_name: scheduler_sunspec
+    hostname: sunspec
+    # A day every 10 minutes
+    command: ["-day", "10m"]
+    networks:
+      - scheduler_network
+    expose:
+      - 502
+    ports:
+      - "502:502"
+
 networks:
   scheduler_network:
 

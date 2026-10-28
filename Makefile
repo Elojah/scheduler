@@ -72,6 +72,11 @@ run: ## Run the scheduler with CONFIG (config/scheduler/local.json), on the brok
 run-web_client: ## Run the web UI with CONFIG_WEB (config/web_client/local.json) on localhost:8080
 	$Q $(GO) run ./cmd/web_client $(CONFIG_WEB)
 
+.PHONY: run-simulator
+# go.mod's sunspec, as docker-compose.yml's tag should be.
+run-simulator: ## Run sunspec's simulated inverter on localhost:1502, a day every 10 minutes
+	$Q $(GO) run github.com/elojah/sunspec/cmd/simulator -address localhost:1502 -day 10m
+
 # Generate (mocks)
 .PHONY: generate
 generate: ## Generate mocks using moq

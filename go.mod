@@ -6,6 +6,7 @@ require (
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/elojah/alarm v0.2.0
 	github.com/elojah/rrule v0.1.0
+	github.com/elojah/sunspec v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/mochi-mqtt/server/v2 v2.7.9

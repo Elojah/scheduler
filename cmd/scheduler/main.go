@@ -28,6 +28,7 @@ import (
 	"github.com/elojah/scheduler/internal/schedule"
 	"github.com/elojah/scheduler/internal/schedule/service"
 	schedulesqlite "github.com/elojah/scheduler/internal/schedule/sqlite"
+	schedulesunspec "github.com/elojah/scheduler/internal/schedule/sunspec"
 	tlog "github.com/elojah/scheduler/pkg/log"
 	"github.com/elojah/scheduler/pkg/mqtt"
 	"github.com/elojah/scheduler/pkg/shutdown"
@@ -89,7 +90,9 @@ func run(prog string, filename string) error {
 		return fail(err)
 	}
 
-	scheduleService := &service.S{Store: store, Operations: schedule.Blank()}
+	operations := schedule.Blank()
+	operations["sunspec_read"] = schedulesunspec.Read
+	scheduleService := &service.S{Store: store, Operations: operations}
 	if err := scheduleService.Dial(ctx); err != nil {
 		return fail(fmt.Errorf("dial schedule service: %w", err))
 	}

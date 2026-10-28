@@ -2,7 +2,9 @@
 
 ## Short-term
 
-- [ ] Real operations in place of `noop`, reading `Options.Params`.
+- [x] Real operations in place of `noop`, reading `Options.Params`: `sunspec_read`.
+- [ ] An operation checks its params at Create and Update, refusing them as `invalid`: today `sunspec_read`'s are only
+  decoded at each time, failing it with a warn.
 - [ ] A bare RRULE, without DTSTART, starting from now: store the set with the DTSTART added, so that it reads back
   the same.
 
