@@ -1,28 +1,44 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* PrimeVue's styles go in a layer of their own, under Tailwind's utilities, so that a class overrides them. */
+@layer theme, base, primevue, components, utilities;
 
+@import 'tailwindcss';
+@import 'tailwindcss-primeui';
+
+/*
+ * FullCalendar's classic theme on PrimeVue's tokens, in place of its palette.css, so that it follows the theme, dark
+ * mode included: FullCalendar would only darken on a data-color-scheme attribute.
+ */
 :root {
-  font-family: ui-sans-serif, system-ui, sans-serif;
-}
+  --fc-classic-button: var(--p-content-background);
+  --fc-classic-button-border: var(--p-content-border-color);
+  --fc-classic-button-strong: var(--p-content-hover-background);
+  --fc-classic-button-strong-border: var(--p-content-border-color);
+  --fc-classic-button-outline: var(--p-focus-ring-color);
+  --fc-classic-button-foreground: var(--p-text-color);
 
-/* FullCalendar on PrimeVue's tokens, so that it follows the theme, dark mode included. */
-.fc {
-  --fc-border-color: var(--p-content-border-color);
-  --fc-page-bg-color: var(--p-content-background);
-  --fc-neutral-bg-color: var(--p-content-hover-background);
-  --fc-list-event-hover-bg-color: var(--p-content-hover-background);
-  --fc-today-bg-color: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
-  --fc-now-indicator-color: var(--p-red-500);
-  --fc-button-bg-color: var(--p-primary-color);
-  --fc-button-border-color: var(--p-primary-color);
-  --fc-button-text-color: var(--p-primary-contrast-color);
-  --fc-button-hover-bg-color: var(--p-primary-hover-color);
-  --fc-button-hover-border-color: var(--p-primary-hover-color);
-  --fc-button-active-bg-color: var(--p-primary-active-color);
-  --fc-button-active-border-color: var(--p-primary-active-color);
-}
+  --fc-classic-primary: var(--p-primary-color);
+  --fc-classic-primary-foreground: var(--p-primary-contrast-color);
 
-.fc .fc-toolbar-title {
-  font-size: 1.125rem;
+  --fc-classic-event: var(--fc-classic-primary);
+  --fc-classic-event-contrast: var(--fc-classic-primary-foreground);
+  --fc-classic-background-event: var(--p-primary-color);
+  --fc-classic-background-event-opacity: 15%;
+  --fc-classic-background-event-foreground-opacity: 50%;
+  --fc-classic-highlight: color-mix(in srgb, var(--p-primary-color) 15%, transparent);
+  --fc-classic-today: color-mix(in srgb, var(--p-primary-color) 6%, transparent);
+  --fc-classic-now: var(--p-red-500);
+  --fc-classic-small-dot-width: 8px;
+  --fc-classic-large-dot-width: 10px;
+
+  --fc-classic-background: var(--p-content-background);
+  --fc-classic-faint: color-mix(in srgb, var(--p-text-color) 4%, transparent);
+  --fc-classic-muted: color-mix(in srgb, var(--p-text-color) 8%, transparent);
+  --fc-classic-strong: color-mix(in srgb, var(--p-text-color) 14%, transparent);
+
+  --fc-classic-foreground: var(--p-text-color);
+  --fc-classic-faint-foreground: color-mix(in srgb, var(--p-text-muted-color) 60%, transparent);
+  --fc-classic-muted-foreground: var(--p-text-muted-color);
+
+  --fc-classic-border: var(--p-content-border-color);
+  --fc-classic-strong-border: color-mix(in srgb, var(--p-text-muted-color) 50%, transparent);
 }

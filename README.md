@@ -119,9 +119,9 @@ A refused request gets `{"error": {"code": …, "message": …}}`:
 ## Web UI
 
 `cmd/web_client` serves the web UI, built from `cmd/client` (Vue 3, PrimeVue, FullCalendar), and an HTTP API that
-forwards to the scheduler over MQTT v5, as a client of the same broker. The UI lists the schedules, creates, edits,
-enables and deletes them, and previews a rule's next times as it is typed. Its calendar shows the times of the enabled
-schedules, by day, week or month.
+forwards to the scheduler over MQTT v5, as a client of the same broker. The UI lists the schedules, their rules in
+words and their next runs, creates, edits, enables and deletes them, and previews a rule's next times as it is typed.
+Its calendar shows the times of the enabled schedules, by day, week or month; a click on one edits its schedule.
 
 ```sh
 docker compose up -d mosquitto

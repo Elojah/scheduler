@@ -13,10 +13,13 @@ enabled one running its operation, such as reading a `../sunspec` device, CRUD o
   `pkg/http.Service`, `handler.go` the routes, the error envelope and the `requester` interface (an `mqtt.Client`),
   one file per endpoint: `forward_schedule.go` (an op, forwarded as is), `list_occurrence.go` (rules expanded by
   rrule, merged into spans), `preview_rule.go`. It embeds `time/tzdata` too.
-- `cmd/client/`: the web UI, trax's client stripped down: Vue 3, Vite, TS, PrimeVue (Aura, trax's sky/amber),
-  Tailwind, FullCalendar, one Pinia store (`stores/schedule.ts`). No router (two `Tabs`), auth, i18n, protobuf,
-  pino, zod or eslint. `components/schedule/{Table,Dialog,Calendar}.vue`, `utils/{api,rule,date}.ts`. Prettier is
-  trax's. `public/logo.svg` is a copy of `assets/logo.svg`.
+- `cmd/client/`: the web UI, trax's client stripped down: Vue 3, Vite, TS, PrimeVue 4 (Aura, trax's sky/amber),
+  Tailwind 4 (its Vite plugin, no config file), FullCalendar 7, one Pinia store (`stores/schedule.ts`), which holds
+  the dialog's state too (`editor`), opened from the header, the table or a calendar event. No router (two `Tabs`),
+  auth, i18n, protobuf, pino, zod or eslint. `components/schedule/{Table,Dialog,Calendar}.vue`,
+  `utils/{api,rule,date}.ts`. `index.css` orders the CSS layers, PrimeVue's under Tailwind's utilities, and maps
+  FullCalendar's classic palette onto PrimeVue's tokens. The calendar's toolbar is PrimeVue's, driven by FullCalendar's
+  `useCalendarController`. Prettier is trax's. `public/logo.svg` is a copy of `assets/logo.svg`.
 - `internal/schedule/`: the domain. `Schedule`, `Options`, `Duration`, `Parse` (validation), the `Store` and `Service`
   interfaces, `Operation`/`Operations`/`Blank`, the typed errors, and their moq mocks (`*_moq.go`, generated and
   committed).
@@ -67,6 +70,9 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
 - The API is strict, as rrule's parsing: unknown JSON fields are `invalid`.
 - The web client's endpoints reply with the same envelope, adding `unavailable` (503, `mqtt.NotConnectedError`) and
   `timeout` (504, `mqtt.TimeoutError`). A forwarded reply passes through as is, its status from its `error.code`.
+- Versions held back: `primevue` 4, `@primeuix/themes` 2 and `primeicons` 7, their next majors being under PrimeTek's
+  commercial license, which wants a key; `typescript` 6, as vue-tsc needs the JS API that 7 has not;
+  `modernc.org/libc` at the version `modernc.org/sqlite`'s go.mod requires.
 
 ## Invariants
 
@@ -100,7 +106,9 @@ Lint (`.golangci.yml`, alarm's) is `default: all` minus a disable list, tests in
   connection. `routes` wraps all in `http.CrossOriginProtection`: no auth, so no other site's POST.
 - `/api/occurrences` walks at most `budget` (10 000) times per schedule and range (at most 62 days); past it, the last
   span lasts until the range's end. The calendar asks `merge=15m` for a day or week and `2h` for a month, telling
-  them apart by a range above 8 days (a week is 7 days and an hour when clocks go back).
+  them apart by a range above 8 days (a week is 7 days and an hour when clocks go back). A month then merges the
+  spans of a schedule starting the same day (`byDay`), listing it once a day. `lazyFetching` is off: a view never
+  reuses another's spans, merged for another range. The table's next runs come from a 1s range, reloaded every 30s.
 - `pkg/sqlite` holds one connection, and the Store binds `options` as text: a `[]byte` would be a BLOB, which a
   STRICT TEXT column refuses.
 

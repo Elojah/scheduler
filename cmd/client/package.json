@@ -10,28 +10,25 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@fullcalendar/core": "^6.1.20",
-    "@fullcalendar/daygrid": "^6.1.20",
-    "@fullcalendar/timegrid": "^6.1.20",
-    "@fullcalendar/vue3": "^6.1.20",
+    "@fullcalendar/vue3": "^7.1.5",
     "@primeuix/themes": "^2.0.3",
-    "pinia": "^2.3.1",
+    "pinia": "^4.1.0",
     "primeicons": "^7.0.0",
-    "primevue": "^4.5.4",
-    "vue": "^3.5.30"
+    "primevue": "^4.5.5",
+    "temporal-polyfill": "^1.0.8",
+    "vue": "^3.5.46"
   },
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.9",
-    "@types/node": "^20.19.37",
-    "@vitejs/plugin-vue": "^6.0.5",
-    "@vue/tsconfig": "^0.5.1",
-    "autoprefixer": "^10.4.27",
-    "postcss": "^8.5.15",
-    "prettier": "^3.8.1",
-    "tailwindcss": "^3.4.19",
+    "@tailwindcss/vite": "^4.3.5",
+    "@tsconfig/node24": "^24.0.6",
+    "@types/node": "^24.19.2",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "@vue/tsconfig": "^0.9.1",
+    "prettier": "^3.10.1",
+    "tailwindcss": "^4.3.5",
     "tailwindcss-primeui": "^0.6.1",
-    "typescript": "~5.7.3",
-    "vite": "^8.0.14",
-    "vue-tsc": "^3.2.5"
+    "typescript": "~6.0.3",
+    "vite": "^8.3.8",
+    "vue-tsc": "^3.3.14"
   }
 }

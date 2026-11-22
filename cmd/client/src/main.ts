@@ -5,6 +5,7 @@ import './index.css'
 import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
 import ToastService from 'primevue/toastservice'
+import Tooltip from 'primevue/tooltip'
 import Aura from '@primeuix/themes/aura'
 import { definePreset } from '@primeuix/themes'
 import 'primeicons/primeicons.css'
@@ -51,11 +52,14 @@ app.use(PrimeVue, {
   theme: {
     preset,
     options: {
-      darkModeSelector: 'system'
+      darkModeSelector: 'system',
+      // Under Tailwind's utilities: index.css orders the layers.
+      cssLayer: { name: 'primevue', order: 'theme, base, primevue' }
     }
   }
 })
 app.use(ConfirmationService)
 app.use(ToastService)
+app.directive('tooltip', Tooltip)
 
 app.mount('#app')
